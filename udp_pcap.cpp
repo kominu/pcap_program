@@ -28,7 +28,7 @@ bpf_u_int32 my_addr;
 bpf_u_int32 my_nmask;
 char my_ip_copy[32];
 int sock, num;
-struct sockaddr_in me;
+struct sockaddr_in me, distination;
 
 int main(void){
 	char cap_name[20] = "cap_data.csv";
@@ -40,6 +40,8 @@ int main(void){
 	struct pcap_pkthdr header;
 	struct in_addr ip_addr;
 	struct hostent *host;
+	char message[256];
+	socklen_t addrlen;
 	/* const u_char *packet; */
 
 	/* とにかくUDPで送る */
@@ -47,11 +49,13 @@ int main(void){
 	gethostname(hostname, sizeof(hostname));
 	host = gethostbyname(hostname);
 	bzero((char *)&me, sizeof(me));
-	me.sin_family = PF_INET;
-	me.sin_port = htons(port);
+	me.sin_family = distination.sin_family = PF_INET;
+	me.sin_port = distination.sin_port = htons(port);
 	//bcopy(host->h_addr, (char *)&me.sin_addr, host->h_length);
 	//if(connect(sock, (struct sockaddr *)&me, sizeof(me)) < 0){
-	if(inet_aton(sock_ip, &me.sin_addr)){
+	inet_aton(sock_ip, &me.sin_addr);
+	inet_aton(sock_ip, &distination.sin_addr);
+	//if(inet_aton(sock_ip, &me.sin_addr)){
 		/*
  		* connectを使用するとsendtoで送る相手を指定できない
  		* sendやwriteであれば使用可
@@ -60,7 +64,7 @@ int main(void){
 			exit(1);
 		}
 		*/
-	}
+	//}
 	
 	/* データ格納用のcsvファイルを開く */
 	cap_csv.open(cap_name, ios_base::out);//見やすくするため上書き設定
@@ -100,6 +104,10 @@ int main(void){
 		cout << "IP:" << my_ip_copy << endl;
 	}
 
+	if(recvfrom(sock, message, strlen(message), 0, (struct sockaddr *)&distination, &addrlen) > 0){
+		cout << message << endl;
+	} 
+
 	/* キャプチャ */
 	cout << "パケットキャプチャを開始" << endl;
 	if(pcap_loop(handle, -1, got_packet, NULL)<0){
@@ -119,6 +127,15 @@ string to_string(int num){
 	os << num;
 	return os.str();
 }
+
+void set_dst(){
+	char dst_ip[16];
+	int dst_port;
+	distination.sin_family = PF_INET;
+	distination.sin_port = dst_port;
+	distination.sin_addr.s_addr = inet_addr(dst_ip);
+}
+	
 
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
 
@@ -155,7 +172,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 	char ip_dst_copy[32];
 	string pcap_data;
 	ostringstream s_count, s_c_length, s_ip_src, s_ip_dst, s_dport, s_sport, s_e_time;
-	char pcap_data_c[256];
+
 
 	/* とりあえずコピペ */
 
@@ -221,19 +238,19 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 			//pcap_data = protocol_name;
 			cap_csv << pcap_data << endl;
 			//write(sock, pcap_data.c_str(), strlen(pcap_data.c_str()));
-			if(sendto(sock, pcap_data.c_str(), strlen(pcap_data.c_str()), 0, (struct sockaddr *)&me, sizeof(me)) < 0){
+			if(sendto(sock, pcap_data.c_str(), strlen(pcap_data.c_str()), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 				cerr << "error in sendto" << endl;
-				count++;
 			}
+			count++;
 		}else if(strcmp(ip_dst_copy, my_ip_copy) == 0){
 			pcap_data = to_string(count) + "," + protocol_name + "," + to_string(c_length) + "," + ip_dst_copy + "," + ip_src_copy + "," + to_string(ntohs(tcp->th_dport)) + "," + to_string(ntohs(tcp->th_sport)) + "," + to_string(e_time) + ",false";
 			//pcap_data = protocol_name;
 			cap_csv << pcap_data << endl;
 			//write(sock, pcap_data.c_str(), strlen(pcap_data.c_str()));
-			if(sendto(sock, pcap_data.c_str(), strlen(pcap_data.c_str()), 0, (struct sockaddr *)&me, sizeof(me)) < 0){
+			if(sendto(sock, pcap_data.c_str(), strlen(pcap_data.c_str()), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 				cerr << "error in sendto" << endl;
-				count++;
 			}
+			count++;
 		}else{
 			cerr << "Cannot find ip:" << my_ip_copy << endl;
 			cerr << "src(" << inet_ntoa(ip->ip_src) << "), dst(" << inet_ntoa(ip->ip_dst) << ")" << endl;
