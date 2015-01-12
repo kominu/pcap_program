@@ -28,6 +28,7 @@ bpf_u_int32 my_addr;
 bpf_u_int32 my_nmask;
 char my_ip_copy[32];
 int sock, num;
+struct sockaddr_in me;
 
 int main(void){
 	char cap_name[20] = "cap_data.csv";
@@ -39,7 +40,6 @@ int main(void){
 	struct pcap_pkthdr header;
 	struct in_addr ip_addr;
 	struct hostent *host;
-	struct sockaddr_in me;
 	/* const u_char *packet; */
 
 	/* とにかくUDPで送る */
@@ -52,10 +52,14 @@ int main(void){
 	//bcopy(host->h_addr, (char *)&me.sin_addr, host->h_length);
 	//if(connect(sock, (struct sockaddr *)&me, sizeof(me)) < 0){
 	if(inet_aton(sock_ip, &me.sin_addr)){
+		/*
+ 		* connectを使用するとsendtoで送る相手を指定できない
+ 		* sendやwriteであれば使用可
 		if(connect(sock, (struct sockaddr *)&me, sizeof(me)) < 0){
 			cerr << "cannot bind socket" << endl;
 			exit(1);
 		}
+		*/
 	}
 	
 	/* データ格納用のcsvファイルを開く */
@@ -216,14 +220,20 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 			pcap_data = to_string(count) + "," + protocol_name + "," + to_string(c_length) + "," + ip_src_copy + "," + ip_dst_copy + "," + to_string(ntohs(tcp->th_sport)) + "," + to_string(ntohs(tcp->th_dport)) + "," + to_string(e_time) + ",true";
 			//pcap_data = protocol_name;
 			cap_csv << pcap_data << endl;
-			write(sock, pcap_data.c_str(), strlen(pcap_data.c_str()));
-			count++;
+			//write(sock, pcap_data.c_str(), strlen(pcap_data.c_str()));
+			if(sendto(sock, pcap_data.c_str(), strlen(pcap_data.c_str()), 0, (struct sockaddr *)&me, sizeof(me)) < 0){
+				cerr << "error in sendto" << endl;
+				count++;
+			}
 		}else if(strcmp(ip_dst_copy, my_ip_copy) == 0){
 			pcap_data = to_string(count) + "," + protocol_name + "," + to_string(c_length) + "," + ip_dst_copy + "," + ip_src_copy + "," + to_string(ntohs(tcp->th_dport)) + "," + to_string(ntohs(tcp->th_sport)) + "," + to_string(e_time) + ",false";
 			//pcap_data = protocol_name;
 			cap_csv << pcap_data << endl;
-			write(sock, pcap_data.c_str(), strlen(pcap_data.c_str()));
-			count++;
+			//write(sock, pcap_data.c_str(), strlen(pcap_data.c_str()));
+			if(sendto(sock, pcap_data.c_str(), strlen(pcap_data.c_str()), 0, (struct sockaddr *)&me, sizeof(me)) < 0){
+				cerr << "error in sendto" << endl;
+				count++;
+			}
 		}else{
 			cerr << "Cannot find ip:" << my_ip_copy << endl;
 			cerr << "src(" << inet_ntoa(ip->ip_src) << "), dst(" << inet_ntoa(ip->ip_dst) << ")" << endl;
