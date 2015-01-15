@@ -125,13 +125,9 @@ int main(void){
 	err_csv.close();
 	close(sock);
 
-	return 0;
-}
+	cout << "finish" << endl;
 
-string to_string(int num){
-	ostringstream os;
-	os << num;
-	return os.str();
+	return 0;
 }
 
 void set_dst(){
@@ -168,7 +164,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		s_time = header->ts.tv_sec*1000 + header->ts.tv_usec/1000;
 	}
 	long e_time = header->ts.tv_sec*1000 + header->ts.tv_usec/1000 - s_time;
-	string protocol_name = "";     
+	char protocol_name[6];     
 	char lsof[256] = "lsof -Fc -i:";
 	char src_port[256] = {'\0'};
 	int sport;
@@ -176,9 +172,8 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 	char process[MAX_LEN];
 	char ip_src_copy[32];
 	char ip_dst_copy[32];
-	string pcap_data;
-	ostringstream s_count, s_c_length, s_ip_src, s_ip_dst, s_dport, s_sport, s_e_time;
-
+	char tcp_flag[16];
+	char pcap_data[256];
 
 	/* とりあえずコピペ */
 
@@ -208,22 +203,32 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 	/* プロトコルを判断する */	
 	switch(ip->ip_p) {
 		case IPPROTO_TCP:
-			protocol_name = "TCP";
+			strcpy(protocol_name, "TCP");
 			break;
 		case IPPROTO_UDP:
-			protocol_name = "UDP";            
+			strcpy(protocol_name, "UDP");            
 			break;
 		case IPPROTO_ICMP:
-			protocol_name = "ICMP";            
+			strcpy(protocol_name, "ICMP");            
 			break;
 		case IPPROTO_IP:
-			protocol_name = "IP";            
+			strcpy(protocol_name, "IP");            
 			break;
 		default:
-			protocol_name = "Unknown";            
+			strcpy(protocol_name, "Unknown");            
 			break;
 	}
 
+	if(ip->ip_p == IPPROTO_TCP){
+		if(tcp->th_flags & TH_FIN) strcpy(tcp_flag, "FIN");
+		else if(tcp->th_flags & TH_RST) strcpy(tcp_flag, "RST");
+		else if(tcp->th_flags & TH_ACK){
+			if(tcp->th_flags & TH_SYN) strcpy(tcp_flag, "SYN/ACK");
+			else strcpy(tcp_flag, "ACK");
+		}
+		else if(tcp->th_flags & TH_SYN) strcpy(tcp_flag, "SYN");
+		else strcpy(tcp_flag, "missed flags");
+	}else strcpy(tcp_flag, "");
 
 	/* 以下コピペによるパケット分析 */
 
@@ -234,26 +239,29 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		cout << "    ・From:" << inet_ntoa(ip->ip_src) << "(" << ntohs(tcp->th_sport) << ")" << endl;
 		cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << "(" << ntohs(tcp->th_dport) << ")" << endl;
 		cout << "    ・Time:" << e_time << "sec" << endl;
+		cout << "      flag:" << tcp_flag << endl;
 
 		strcpy(ip_src_copy, inet_ntoa(ip->ip_src));
 		strcpy(ip_dst_copy, inet_ntoa(ip->ip_dst));
 
 
 		if(strcmp(ip_src_copy, my_ip_copy) == 0){
-			pcap_data = to_string(count) + "," + protocol_name + "," + to_string(c_length) + "," + ip_src_copy + "," + ip_dst_copy + "," + to_string(ntohs(tcp->th_sport)) + "," + to_string(ntohs(tcp->th_dport)) + "," + to_string(e_time) + ",true";
+			sprintf(pcap_data, "%d,%s,%d,%s,%s,%d,%d,%d,true,%s", count, protocol_name, c_length, ip_src_copy, ip_dst_copy, ntohs(tcp->th_sport), ntohs(tcp->th_dport), e_time, tcp_flag);
+			//pcap_data = to_string(count) + "," + protocol_name + "," + to_string(c_length) + "," + ip_src_copy + "," + ip_dst_copy + "," + to_string(ntohs(tcp->th_sport)) + "," + to_string(ntohs(tcp->th_dport)) + "," + to_string(e_time) + ",true";
 			//pcap_data = protocol_name;
 			cap_csv << pcap_data << endl;
 			//write(sock, pcap_data.c_str(), strlen(pcap_data.c_str()));
-			if(sendto(sock, pcap_data.c_str(), strlen(pcap_data.c_str()), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
+			if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 				cerr << "error in sendto" << endl;
 			}
 			count++;
 		}else if(strcmp(ip_dst_copy, my_ip_copy) == 0){
-			pcap_data = to_string(count) + "," + protocol_name + "," + to_string(c_length) + "," + ip_dst_copy + "," + ip_src_copy + "," + to_string(ntohs(tcp->th_dport)) + "," + to_string(ntohs(tcp->th_sport)) + "," + to_string(e_time) + ",false";
+			sprintf(pcap_data, "%d,%s,%d,%s,%s,%d,%d,%d,false,%s", count, protocol_name, c_length, ip_dst_copy, ip_src_copy, ntohs(tcp->th_dport), ntohs(tcp->th_sport), e_time, tcp_flag);
+			//pcap_data = to_string(count) + "," + protocol_name + "," + to_string(c_length) + "," + ip_dst_copy + "," + ip_src_copy + "," + to_string(ntohs(tcp->th_dport)) + "," + to_string(ntohs(tcp->th_sport)) + "," + to_string(e_time) + ",false";
 			//pcap_data = protocol_name;
 			cap_csv << pcap_data << endl;
-			//write(sock, pcap_data.c_str(), strlen(pcap_data.c_str()));
-			if(sendto(sock, pcap_data.c_str(), strlen(pcap_data.c_str()), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
+			//write(sock, pcap_data, strlen(pcap_data));
+			if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 				cerr << "error in sendto" << endl;
 			}
 			count++;
