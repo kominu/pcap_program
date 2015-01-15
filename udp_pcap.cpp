@@ -35,7 +35,10 @@ int main(void){
 	char err_name[20] = "err_data.csv";
 	char *dev, errbuf[PCAP_ERRBUF_SIZE], hostname[256];
 	int port = 20000;
-	char *sock_ip = "54.64.112.212";
+	//char *sock_ip = "54.64.112.212";
+	char *sock_ip = "172.31.19.205";
+	//char *dst_ip = "119.172.116.86";
+	char *dst_ip = "172.31.19.205";
 	pcap_t *handle;
 	struct pcap_pkthdr header;
 	struct in_addr ip_addr;
@@ -49,12 +52,14 @@ int main(void){
 	gethostname(hostname, sizeof(hostname));
 	host = gethostbyname(hostname);
 	bzero((char *)&me, sizeof(me));
+	bzero((char *)&distination, sizeof(distination));
 	me.sin_family = distination.sin_family = PF_INET;
 	me.sin_port = distination.sin_port = htons(port);
 	//bcopy(host->h_addr, (char *)&me.sin_addr, host->h_length);
 	//if(connect(sock, (struct sockaddr *)&me, sizeof(me)) < 0){
 	inet_aton(sock_ip, &me.sin_addr);
-	inet_aton(sock_ip, &distination.sin_addr);
+	inet_aton(dst_ip, &distination.sin_addr);
+	bind(sock, (struct sockaddr *)&me, sizeof(me));
 	//if(inet_aton(sock_ip, &me.sin_addr)){
 		/*
  		* connectを使用するとsendtoで送る相手を指定できない
@@ -104,6 +109,7 @@ int main(void){
 		cout << "IP:" << my_ip_copy << endl;
 	}
 
+	addrlen = sizeof(distination);
 	if(recvfrom(sock, message, strlen(message), 0, (struct sockaddr *)&distination, &addrlen) > 0){
 		cout << message << endl;
 	} 
