@@ -92,7 +92,7 @@ int main(void){
 	printf("デバイス:%s\n", dev);
 
 	/* ディバイスをオープン(非プロミスキャスモード) */
-	handle = pcap_open_live(dev, 256, 0, 10000, errbuf);
+	handle = pcap_open_live(dev, 1024, 0, 10000, errbuf);
 	if(handle == NULL){
 		fprintf(stderr, "デバイス「%s」を開けません:%s\n", dev, errbuf);
 		exit(1);
@@ -233,34 +233,34 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 	/* 以下コピペによるパケット分析 */
 
 	/* Src、DstのIPアドレスとポート番号 */
-	if(ntohs(tcp->th_sport) != 22 && ntohs(tcp->th_dport) != 22 && ntohs(tcp->th_dport) != 20000){
-		cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
-
-		cout << "    ・From:" << inet_ntoa(ip->ip_src) << "(" << ntohs(tcp->th_sport) << ")" << endl;
-		cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << "(" << ntohs(tcp->th_dport) << ")" << endl;
-		cout << "    ・Time:" << e_time << "sec" << endl;
-		cout << "      flag:" << tcp_flag << endl;
+	if(ntohs(tcp->th_sport) != 22 && ntohs(tcp->th_dport) != 22 && ntohs(tcp->th_sport) != 20000){
 
 		strcpy(ip_src_copy, inet_ntoa(ip->ip_src));
 		strcpy(ip_dst_copy, inet_ntoa(ip->ip_dst));
 
 
 		if(strcmp(ip_src_copy, my_ip_copy) == 0){
+			cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
+
+			cout << "    ・From:" << inet_ntoa(ip->ip_src) << "(" << ntohs(tcp->th_sport) << ")" << endl;
+			cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << "(" << ntohs(tcp->th_dport) << ")" << endl;
+			cout << "    ・Time:" << e_time << "sec" << endl;
+			cout << "      flag:" << tcp_flag << endl;
 			sprintf(pcap_data, "%d,%s,%d,%s,%s,%d,%d,%d,true,%s", count, protocol_name, c_length, ip_src_copy, ip_dst_copy, ntohs(tcp->th_sport), ntohs(tcp->th_dport), e_time, tcp_flag);
-			//pcap_data = to_string(count) + "," + protocol_name + "," + to_string(c_length) + "," + ip_src_copy + "," + ip_dst_copy + "," + to_string(ntohs(tcp->th_sport)) + "," + to_string(ntohs(tcp->th_dport)) + "," + to_string(e_time) + ",true";
-			//pcap_data = protocol_name;
 			cap_csv << pcap_data << endl;
-			//write(sock, pcap_data.c_str(), strlen(pcap_data.c_str()));
 			if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 				cerr << "error in sendto" << endl;
 			}
 			count++;
 		}else if(strcmp(ip_dst_copy, my_ip_copy) == 0){
+			cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
+
+			cout << "    ・From:" << inet_ntoa(ip->ip_src) << "(" << ntohs(tcp->th_sport) << ")" << endl;
+			cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << "(" << ntohs(tcp->th_dport) << ")" << endl;
+			cout << "    ・Time:" << e_time << "sec" << endl;
+			cout << "      flag:" << tcp_flag << endl;
 			sprintf(pcap_data, "%d,%s,%d,%s,%s,%d,%d,%d,false,%s", count, protocol_name, c_length, ip_dst_copy, ip_src_copy, ntohs(tcp->th_dport), ntohs(tcp->th_sport), e_time, tcp_flag);
-			//pcap_data = to_string(count) + "," + protocol_name + "," + to_string(c_length) + "," + ip_dst_copy + "," + ip_src_copy + "," + to_string(ntohs(tcp->th_dport)) + "," + to_string(ntohs(tcp->th_sport)) + "," + to_string(e_time) + ",false";
-			//pcap_data = protocol_name;
 			cap_csv << pcap_data << endl;
-			//write(sock, pcap_data, strlen(pcap_data));
 			if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 				cerr << "error in sendto" << endl;
 			}
@@ -274,10 +274,10 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		if (size_ip < 20) {
 			cerr << "    --不正なIPヘッダ長:" << size_ip << "bytes--" << endl;
 		}
-
-		if (size_tcp < 20) {
+		if (ip->ip_p == IPPROTO_TCP && size_tcp < 20) {
 			cerr << "    --不正なTCPヘッダ長:" << size_tcp << "bytes--" << endl;
 		}
+
 	}
 }
 
