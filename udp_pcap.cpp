@@ -148,8 +148,17 @@ int main(void){
 int checkpre(char *cl_ip, char *proto, char *flag, int sv_port, int ptime, int state){
 	if(state == 0){
 		//transmit
-		if(strcmp(cl_ip, pre_clip[0]) == 0 && strcmp(proto, pre_protocol[0]) == 0 && strcmp(flag, pre_flag[0]) == 0 && sv_port == pre_svport[0] && ptime <= pre_time[0] + 300){
-			cout << "cut" << endl << endl;
+		if(strcmp(cl_ip, pre_clip[0]) == 0 && strcmp(proto, pre_protocol[0]) == 0 && strcmp(flag, pre_flag[0]) == 0 && sv_port == pre_svport[0]){
+			if(strcmp(flag, "ACK") == 0 && ptime <= pre_time[0] + 300) cout << "cut1 " << proto << " " << flag << endl;
+			else if(ptime <= pre_time[0] + 10) cout << "cut2 " << proto << " " << flag << endl;
+			else{
+				strcpy(pre_clip[0], cl_ip);
+				strcpy(pre_protocol[0], proto);
+				strcpy(pre_flag[0], flag);
+				pre_svport[0] = sv_port;
+				pre_time[0] = ptime;
+				return 1;
+			}
 			return 0;
 		}else{	
 			strcpy(pre_clip[0], cl_ip);
@@ -160,8 +169,17 @@ int checkpre(char *cl_ip, char *proto, char *flag, int sv_port, int ptime, int s
 			return 1;
 		}
 	}else{
-		if(strcmp(cl_ip, pre_clip[1]) == 0 && strcmp(proto, pre_protocol[1]) == 0 && strcmp(flag, pre_flag[1]) == 0 && sv_port == pre_svport[1] && ptime <= pre_time[1] + 300){
-			cout << "cut" << endl << endl;
+		if(strcmp(cl_ip, pre_clip[1]) == 0 && strcmp(proto, pre_protocol[1]) == 0 && strcmp(flag, pre_flag[1]) == 0 && sv_port == pre_svport[1]){
+			if(strcmp(flag, "ACK") == 0 && ptime <= pre_time[1] + 300) cout << "cut1 " << proto << " " << flag << endl;
+			else if(ptime <= pre_time[1] + 10) cout << "cut2 " << proto << " " << flag << endl;
+			else{
+				strcpy(pre_clip[1], cl_ip);
+				strcpy(pre_protocol[1], proto);
+				strcpy(pre_flag[1], flag);
+				pre_svport[1] = sv_port;
+				pre_time[1] = ptime;
+				return 1;
+			}
 			return 0;
 		}else{	
 			strcpy(pre_clip[1], cl_ip);
@@ -276,7 +294,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		strcpy(ip_dst_copy, inet_ntoa(ip->ip_dst));
 
 		if(strcmp(ip_src_copy, my_ip_copy) == 0){
-			if(checkpre(ip_dst_copy, protocol_name, tcp_flag, ntohs(tcp->th_dport), e_time, 0)){
+			if(checkpre(ip_dst_copy, protocol_name, tcp_flag, ntohs(tcp->th_sport), e_time, 0)){
 				cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
 				cout << "    ・From:" << inet_ntoa(ip->ip_src) << "(" << ntohs(tcp->th_sport) << ")" << endl;
@@ -291,7 +309,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 				count++;
 			}
 		}else if(strcmp(ip_dst_copy, my_ip_copy) == 0){
-			if(checkpre(ip_src_copy, protocol_name, tcp_flag, ntohs(tcp->th_sport), e_time, 1)){
+			if(checkpre(ip_src_copy, protocol_name, tcp_flag, ntohs(tcp->th_dport), e_time, 1)){
 
 				cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
