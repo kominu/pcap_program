@@ -50,6 +50,8 @@ int main(void){
 	struct in_addr ip_addr;
 	struct hostent *host;
 	char message[256];
+	char filter_exp[] = "not port 22 and not port 20000";
+	struct bpf_program fp;
 	socklen_t addrlen;
 	/* const u_char *packet; */
 
@@ -106,13 +108,6 @@ int main(void){
 	}
 	printf("デバイス:%s\n", dev);
 
-	/* ディバイスをオープン(非プロミスキャスモード) */
-	handle = pcap_open_live(dev, 1024, 0, 10000, errbuf);
-	if(handle == NULL){
-		fprintf(stderr, "デバイス「%s」を開けません:%s\n", dev, errbuf);
-		exit(1);
-	}
-
 	/* IPアドレスとネットマスクを取得 */
 	if(pcap_lookupnet(dev, &my_addr, &my_nmask, errbuf)<0){
 		fprintf(stderr, "IPアドレスとネットマスクの取得に失敗しました%s\n", errbuf);
@@ -122,6 +117,22 @@ int main(void){
 		//strcpy(my_ip_copy, inet_ntoa(ip_addr));
 		strcpy(my_ip_copy, "172.31.19.205");
 		cout << "IP:" << my_ip_copy << endl;
+	}
+
+	/* ディバイスをオープン(非プロミスキャスモード) */
+	handle = pcap_open_live(dev, 64, 0, 10000, errbuf);
+	if(handle == NULL){
+		fprintf(stderr, "デバイス「%s」を開けません:%s\n", dev, errbuf);
+		exit(1);
+	}
+
+	if(pcap_compile(handle, &fp, filter_exp, 0, my_addr) == -1){
+		cerr << "cannot compile filter" << endl;
+		return(2);
+	}
+	if(pcap_setfilter(handle, &fp) == -1){
+		cerr << "cannot import filter " << endl;
+		return(2);
 	}
 
 	addrlen = sizeof(distination);
@@ -148,18 +159,31 @@ int main(void){
 int checkpre(char *cl_ip, char *proto, char *flag, int sv_port, int ptime, int state){
 	if(state == 0){
 		//transmit
-		if(strcmp(cl_ip, pre_clip[0]) == 0 && strcmp(proto, pre_protocol[0]) == 0 && strcmp(flag, pre_flag[0]) == 0 && sv_port == pre_svport[0]){
-			if(strcmp(flag, "ACK") == 0 && ptime <= pre_time[0] + 300) cout << "cut1 " << proto << " " << flag << endl;
-			else if(ptime <= pre_time[0] + 10) cout << "cut2 " << proto << " " << flag << endl;
-			else{
-				strcpy(pre_clip[0], cl_ip);
-				strcpy(pre_protocol[0], proto);
-				strcpy(pre_flag[0], flag);
-				pre_svport[0] = sv_port;
-				pre_time[0] = ptime;
-				return 1;
+		if(strcmp(cl_ip, pre_clip[0]) == 0 && strcmp(proto, pre_protocol[0]) == 0 && strcmp(flag, pre_flag[0]) == 0){
+			if(sv_port == pre_svport[0]){
+				if(strcmp(flag, "ACK") == 0 && ptime <= pre_time[0] + 400) cout << "cut1 " << proto << " " << flag << endl;
+				else if(ptime <= pre_time[0] + 50) cout << "cut2 " << proto << " " << flag << endl;
+				else{
+					strcpy(pre_clip[0], cl_ip);
+					strcpy(pre_protocol[0], proto);
+					strcpy(pre_flag[0], flag);
+					pre_svport[0] = sv_port;
+					pre_time[0] = ptime;
+					return 1;
+				}
+				return 0;
+			}else if(sv_port -10 <= pre_svport[0] && sv_port + 10 >= pre_svport[0]){
+				if(ptime <= pre_time[0] + 10) cout << "cut3 " << proto << " " << flag << endl;
+				else{
+					strcpy(pre_clip[0], cl_ip);
+					strcpy(pre_protocol[0], proto);
+					strcpy(pre_flag[0], flag);
+					pre_svport[0] = sv_port;
+					pre_time[0] = ptime;
+					return 1;
+				}
+				return 0;
 			}
-			return 0;
 		}else{	
 			strcpy(pre_clip[0], cl_ip);
 			strcpy(pre_protocol[0], proto);
@@ -169,18 +193,31 @@ int checkpre(char *cl_ip, char *proto, char *flag, int sv_port, int ptime, int s
 			return 1;
 		}
 	}else{
-		if(strcmp(cl_ip, pre_clip[1]) == 0 && strcmp(proto, pre_protocol[1]) == 0 && strcmp(flag, pre_flag[1]) == 0 && sv_port == pre_svport[1]){
-			if(strcmp(flag, "ACK") == 0 && ptime <= pre_time[1] + 300) cout << "cut1 " << proto << " " << flag << endl;
-			else if(ptime <= pre_time[1] + 10) cout << "cut2 " << proto << " " << flag << endl;
-			else{
-				strcpy(pre_clip[1], cl_ip);
-				strcpy(pre_protocol[1], proto);
-				strcpy(pre_flag[1], flag);
-				pre_svport[1] = sv_port;
-				pre_time[1] = ptime;
-				return 1;
+		if(strcmp(cl_ip, pre_clip[1]) == 0 && strcmp(proto, pre_protocol[1]) == 0 && strcmp(flag, pre_flag[1]) == 0){
+			if(sv_port == pre_svport[1]){
+				if(strcmp(flag, "ACK") == 0 && ptime <= pre_time[1] + 300) cout << "cut1 " << proto << " " << flag << endl;
+				else if(ptime <= pre_time[1] + 10) cout << "cut2 " << proto << " " << flag << endl;
+				else{
+					strcpy(pre_clip[1], cl_ip);
+					strcpy(pre_protocol[1], proto);
+					strcpy(pre_flag[1], flag);
+					pre_svport[1] = sv_port;
+					pre_time[1] = ptime;
+					return 1;
+				}
+				return 0;
+			}else if(sv_port -10 <= pre_svport[1] && sv_port + 10 >= pre_svport[1]){
+				if(ptime <= pre_time[1] + 10) cout << "cut3 " << proto << " " << flag << endl;
+				else{
+					strcpy(pre_clip[1], cl_ip);
+					strcpy(pre_protocol[1], proto);
+					strcpy(pre_flag[1], flag);
+					pre_svport[1] = sv_port;
+					pre_time[1] = ptime;
+					return 1;
+				}
+				return 0;
 			}
-			return 0;
 		}else{	
 			strcpy(pre_clip[1], cl_ip);
 			strcpy(pre_protocol[1], proto);
@@ -288,7 +325,8 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 	/* 以下コピペによるパケット分析 */
 
 	/* Src、DstのIPアドレスとポート番号 */
-	if(ntohs(tcp->th_sport) != 22 && ntohs(tcp->th_dport) != 22 && ntohs(tcp->th_sport) != 20000){
+	//if(ntohs(tcp->th_sport) != 22 && ntohs(tcp->th_dport) != 22 && ntohs(tcp->th_sport) != 20000){
+	if(ntohs(tcp->th_sport) != -1){
 
 		strcpy(ip_src_copy, inet_ntoa(ip->ip_src));
 		strcpy(ip_dst_copy, inet_ntoa(ip->ip_dst));
