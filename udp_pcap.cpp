@@ -120,7 +120,7 @@ int main(void){
 	}
 
 	/* ディバイスをオープン(非プロミスキャスモード) */
-	handle = pcap_open_live(dev, 64, 0, 10000, errbuf);
+	handle = pcap_open_live(dev, 64, 1, 10000, errbuf);
 	if(handle == NULL){
 		fprintf(stderr, "デバイス「%s」を開けません:%s\n", dev, errbuf);
 		exit(1);
@@ -241,7 +241,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 	const struct sniff_ethernet *ethernet;	/* イーサネットヘッダ */
 	const struct sniff_ip *ip;		/* IPヘッダ */
 	const struct sniff_tcp *tcp;		/* TCPヘッダ */
-	const char *payload;			/* パケットペイロード */
+	//const char *payload;			/* パケットペイロード */
 
 	u_int size_ip;
 	u_int size_tcp;
@@ -284,13 +284,15 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 	   printf("不正なTCPヘッダ長:%ubytes\n", size_tcp);
 	   }
 	   */
-	payload = (char *)(packet + SIZE_ETHERNET + size_ip + size_tcp);
+	//payload = (char *)(packet + SIZE_ETHERNET + size_ip + size_tcp);
 
 	/* コピペここまで */
 
+	/*
 	if(c_length < length){
 		err_msg = " <<lack!";
 	}
+	*/
 
 	/* プロトコルを判断する */	
 	switch(ip->ip_p) {
@@ -374,6 +376,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		if (ip->ip_p == IPPROTO_TCP && size_tcp < 20) {
 			cerr << "    --不正なTCPヘッダ長:" << size_tcp << "bytes--" << endl;
 		}
+		//if(payload != NULL) cout << payload << endl;
 	}
 
 }
