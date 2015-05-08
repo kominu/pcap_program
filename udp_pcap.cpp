@@ -36,7 +36,7 @@ struct sockaddr_in me, distination;
 char pre_clip[2][16], pre_protocol[2][10], pre_flag[2][8];
 int pre_svport[2], pre_time[2];
 
-int main(void){
+int main(int argc, char *argv[]){
 	char cap_name[20] = "cap_data.csv";
 	char err_name[20] = "err_data.csv";
 	char *dev, errbuf[PCAP_ERRBUF_SIZE], hostname[256];
@@ -107,7 +107,7 @@ int main(void){
 		exit(1); /* プログラムを終了させる */
 	}
 	printf("デバイス:%s\n", dev);
-
+	printf("%d\n", argc);
 	/* IPアドレスとネットマスクを取得 */
 	if(pcap_lookupnet(dev, &my_addr, &my_nmask, errbuf)<0){
 		fprintf(stderr, "IPアドレスとネットマスクの取得に失敗しました%s\n", errbuf);
@@ -115,12 +115,14 @@ int main(void){
 	}else{
 		ip_addr.s_addr = my_addr;
 		//strcpy(my_ip_copy, inet_ntoa(ip_addr));
-		strcpy(my_ip_copy, "172.31.19.205");
+		if(argc == 1) strcpy(my_ip_copy, "172.31.19.205");
+		else strcpy(my_ip_copy, argv[2]);
 		cout << "IP:" << my_ip_copy << endl;
 	}
 
 	/* ディバイスをオープン(非プロミスキャスモード) */
-	handle = pcap_open_live(dev, 64, 1, 10000, errbuf);
+	if(argc == 1) handle = pcap_open_live(dev, 64, 1, 10000, errbuf);
+	else handle = pcap_open_offline(argv[1], errbuf);
 	if(handle == NULL){
 		fprintf(stderr, "デバイス「%s」を開けません:%s\n", dev, errbuf);
 		exit(1);
