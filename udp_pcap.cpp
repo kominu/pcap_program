@@ -144,10 +144,19 @@ int main(int argc, char *argv[]){
 
 	/* キャプチャ */
 	cout << "パケットキャプチャを開始" << endl;
+	/* offlineかonlineかを送信 */
+	if(argc > 1){ 
+		if(sendto(sock, "offline", strlen("offline"), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
+			cerr << "error in sendto" << endl;
+		}
+	}
+
+	/* loop */
 	if(pcap_loop(handle, -1, got_packet, NULL)<0){
 		fprintf(stderr, "キャプチャに失敗:%s\n", errbuf);
 		exit(1);
 	}
+
 	pcap_close(handle);
 	cap_csv.close();
 	err_csv.close();
@@ -341,7 +350,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 
 				cout << "    ・From:" << inet_ntoa(ip->ip_src) << "(" << ntohs(tcp->th_sport) << ")" << endl;
 				cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << "(" << ntohs(tcp->th_dport) << ")" << endl;
-				cout << "    ・Time:" << e_time << "sec" << endl;
+				cout << "    ・Time:" << e_time << "milisec" << endl;
 				cout << "      flag:" << tcp_flag << endl;
 				sprintf(pcap_data, "%d,%s,%d,%s,%s,%d,%d,%d,true,%s", count, protocol_name, c_length, ip_src_copy, ip_dst_copy, ntohs(tcp->th_sport), ntohs(tcp->th_dport), e_time, tcp_flag);
 				cap_csv << pcap_data << endl;
@@ -357,7 +366,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 
 				cout << "    ・From:" << inet_ntoa(ip->ip_src) << "(" << ntohs(tcp->th_sport) << ")" << endl;
 				cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << "(" << ntohs(tcp->th_dport) << ")" << endl;
-				cout << "    ・Time:" << e_time << "sec" << endl;
+				cout << "    ・Time:" << e_time << "milisec" << endl;
 				cout << "      flag:" << tcp_flag << endl;
 				sprintf(pcap_data, "%d,%s,%d,%s,%s,%d,%d,%d,false,%s", count, protocol_name, c_length, ip_dst_copy, ip_src_copy, ntohs(tcp->th_dport), ntohs(tcp->th_sport), e_time, tcp_flag);
 				cap_csv << pcap_data << endl;
