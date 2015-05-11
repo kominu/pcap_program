@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
 #include <netdb.h>
 #include <ctype.h>
 
@@ -44,20 +46,22 @@ int main(int argc, char *argv[]){
 	char *dev, errbuf[PCAP_ERRBUF_SIZE], hostname[256];
 	int port = 20000;
 	//char *sock_ip = "54.64.112.212";
-	char *sock_ip = "172.31.19.205";//aws server1
+	//char *sock_ip = "172.31.19.205";//aws server1
 	//char *sock_ip = "172.31.30.244";//aws proxy
 	//char *dst_ip = "119.172.116.86";
-	char *dst_ip = "172.31.19.205";//aws server1
+	//char *dst_ip = "172.31.19.205";//aws server1
 	//char *dst_ip = "172.31.30.244";//aws proxy
+	char *sock_ip, *dst_ip;
 	pcap_t *handle;
 	struct pcap_pkthdr header;
-	struct in_addr ip_addr;
+	//struct in_addr ip_addr;
 	struct hostent *host;
 	char message[256];
 	//char filter_exp[] = "not port 20000";
 	char filter_exp[] = "";
 	struct bpf_program fp;
 	socklen_t addrlen;
+	struct ifreq ifr;
 	/* const u_char *packet; */
 
 	/* pre_*を初期化 */
@@ -87,18 +91,16 @@ int main(int argc, char *argv[]){
 	pre_svport[0] = pre_svport[1] = pre_time[0] = pre_time[1] = 0;
 	*/
 	/* とにかくUDPで送る */
-	sock = socket(PF_INET, SOCK_DGRAM, 0);
+	sock = socket(AF_INET, SOCK_DGRAM, 0);
 	gethostname(hostname, sizeof(hostname));
 	host = gethostbyname(hostname);
 	bzero((char *)&me, sizeof(me));
 	bzero((char *)&distination, sizeof(distination));
-	me.sin_family = distination.sin_family = PF_INET;
+	me.sin_family = distination.sin_family = AF_INET;
 	me.sin_port = distination.sin_port = htons(port);
+	/* 続きはlookupnetの後に記述（ipアドレスが必要なため) */
 	//bcopy(host->h_addr, (char *)&me.sin_addr, host->h_length);
 	//if(connect(sock, (struct sockaddr *)&me, sizeof(me)) < 0){
-	inet_aton(sock_ip, &me.sin_addr);
-	inet_aton(dst_ip, &distination.sin_addr);
-	bind(sock, (struct sockaddr *)&me, sizeof(me));
 	//if(inet_aton(sock_ip, &me.sin_addr)){
 	/*
 	 * connectを使用するとsendtoで送る相手を指定できない
@@ -109,6 +111,7 @@ int main(int argc, char *argv[]){
 	 }
 	 */
 	//}
+	
 
 	/* データ格納用のcsvファイルを開く */
 	cap_csv.open(cap_name, ios_base::out);//見やすくするため上書き設定
@@ -130,17 +133,30 @@ int main(int argc, char *argv[]){
 	}
 	printf("デバイス:%s\n", dev);
 	printf("%d\n", argc);
-	/* IPアドレスとネットマスクを取得 */
+
+	/* ipアドレスを取得 */
+	ifr.ifr_addr.sa_family = AF_INET;
+	strncpy(ifr.ifr_name, dev, IFNAMSIZ - 1);
+	ioctl(sock, SIOCGIFADDR, &ifr);
+	
+
+	/* ネットワークアドレスとネットマスクを取得 */
 	if(pcap_lookupnet(dev, &my_addr, &my_nmask, errbuf)<0){
 		fprintf(stderr, "IPアドレスとネットマスクの取得に失敗しました%s\n", errbuf);
 		exit(1);
 	}else{
-		ip_addr.s_addr = my_addr;
+		strcpy(my_ip_copy, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 		//strcpy(my_ip_copy, inet_ntoa(ip_addr));
-		if(argc == 1) strcpy(my_ip_copy, sock_ip);
-		else strcpy(my_ip_copy, argv[2]);
+		//if(argc == 1) strcpy(my_ip_copy, sock_ip);
+		//else if(argc == 2) strcpy(my_ip_copy, argv[2]);
 		cout << "IP:" << my_ip_copy << endl;
 	}
+
+	/* socket設定の続き ipアドレスが必要なため */
+	sock_ip = dst_ip = my_ip_copy;
+	inet_aton(sock_ip, &me.sin_addr);
+	inet_aton(dst_ip, &distination.sin_addr);
+	bind(sock, (struct sockaddr *)&me, sizeof(me));
 
 	/* ディバイスをオープン(非プロミスキャスモード) */
 	if(argc == 1) handle = pcap_open_live(dev, 64, 1, 10000, errbuf);
