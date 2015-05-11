@@ -137,7 +137,7 @@ int main(int argc, char *argv[]){
 	}else{
 		ip_addr.s_addr = my_addr;
 		//strcpy(my_ip_copy, inet_ntoa(ip_addr));
-		if(argc == 1) strcpy(my_ip_copy, "172.31.19.205");
+		if(argc == 1) strcpy(my_ip_copy, sock_ip);
 		else strcpy(my_ip_copy, argv[2]);
 		cout << "IP:" << my_ip_copy << endl;
 	}
