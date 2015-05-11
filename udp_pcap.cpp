@@ -33,8 +33,10 @@ struct sockaddr_in me, distination;
  * 直前のip, port, protocol, flag, 経過時間と比較し、
  * 送るパケットの圧縮をはかる
  */
-char pre_clip[2][16], pre_protocol[2][10], pre_flag[2][8];
-int pre_svport[2], pre_time[2];
+//char pre_clip[2][16], pre_protocol[2][10], pre_flag[2][8];
+char pre_tcp_syn[2][26], pre_tcp_ack[2][26], pre_tcp_synack[2][26], pre_tcp_other[2][26], pre_udp[2][26], pre_icmp[2][26], pre_other[2][26];
+int pre_tcp_syn_time, pre_tcp_ack_time, pre_tcp_synack_time, pre_tcp_other_time, pre_udp_time, pre_icmp_time, pre_other_time;
+//int pre_svport[2], pre_time[2];
 
 int main(int argc, char *argv[]){
 	char cap_name[20] = "cap_data.csv";
@@ -50,12 +52,30 @@ int main(int argc, char *argv[]){
 	struct in_addr ip_addr;
 	struct hostent *host;
 	char message[256];
-	char filter_exp[] = "not port 22 and not port 20000";
+	//char filter_exp[] = "not port 20000";
+	char filter_exp[] = "";
 	struct bpf_program fp;
 	socklen_t addrlen;
 	/* const u_char *packet; */
 
 	/* pre_*を初期化 */
+
+	strcpy(pre_tcp_syn[0], "0");
+	strcpy(pre_tcp_ack[0], "0");
+	strcpy(pre_tcp_synack[0], "0");
+	strcpy(pre_tcp_other[0], "0");
+	strcpy(pre_udp[0], "0");
+	strcpy(pre_icmp[0], "0");
+	strcpy(pre_other[0], "0");
+	strcpy(pre_tcp_syn[1], "0");
+	strcpy(pre_tcp_ack[1], "0");
+	strcpy(pre_tcp_synack[1], "0");
+	strcpy(pre_tcp_other[1], "0");
+	strcpy(pre_udp[1], "0");
+	strcpy(pre_icmp[1], "0");
+	strcpy(pre_other[1], "0");
+	pre_tcp_syn_time = pre_tcp_ack_time = pre_tcp_synack_time = pre_tcp_other_time = pre_udp_time = pre_icmp_time = pre_other_time = 0; 
+	/*
 	strcpy(pre_clip[0], "0");
 	strcpy(pre_clip[1], "0");
 	strcpy(pre_protocol[0], "0");
@@ -63,7 +83,7 @@ int main(int argc, char *argv[]){
 	strcpy(pre_flag[0], "0");
 	strcpy(pre_flag[1], "0");
 	pre_svport[0] = pre_svport[1] = pre_time[0] = pre_time[1] = 0;
-
+	*/
 	/* とにかくUDPで送る */
 	sock = socket(PF_INET, SOCK_DGRAM, 0);
 	gethostname(hostname, sizeof(hostname));
@@ -168,74 +188,177 @@ int main(int argc, char *argv[]){
 }
 
 int checkpre(char *cl_ip, char *proto, char *flag, int sv_port, int ptime, int state){
+	char cmp_exp[21], charport[5];
+	sprintf(charport, "%d", sv_port);
+	strcpy(cmp_exp, cl_ip);
+	strcat(cmp_exp, charport);
+
+	int samplesec = 50;
 	if(state == 0){
 		//transmit
-		if(strcmp(cl_ip, pre_clip[0]) == 0 && strcmp(proto, pre_protocol[0]) == 0 && strcmp(flag, pre_flag[0]) == 0){
-			if(sv_port == pre_svport[0]){
-				if(strcmp(flag, "ACK") == 0 && ptime <= pre_time[0] + 400) cout << "cut1 " << proto << " " << flag << endl;
-				else if(ptime <= pre_time[0] + 50) cout << "cut2 " << proto << " " << flag << endl;
-				else{
-					strcpy(pre_clip[0], cl_ip);
-					strcpy(pre_protocol[0], proto);
-					strcpy(pre_flag[0], flag);
-					pre_svport[0] = sv_port;
-					pre_time[0] = ptime;
-					return 1;
+
+		if(strcmp(proto, "TCP") == 0){
+			if(strcmp(flag, "SYN") == 0){
+				if(strcmp(cmp_exp, pre_tcp_syn[0]) == 0){
+					if(ptime <= pre_tcp_syn_time + samplesec){
+						cout << "cut " << proto << flag << sv_port << ptime << endl;
+						return 0;
+					}
 				}
-				return 0;
-			}else if(sv_port -10 <= pre_svport[0] && sv_port + 10 >= pre_svport[0]){
-				if(ptime <= pre_time[0] + 10) cout << "cut3 " << proto << " " << flag << endl;
-				else{
-					strcpy(pre_clip[0], cl_ip);
-					strcpy(pre_protocol[0], proto);
-					strcpy(pre_flag[0], flag);
-					pre_svport[0] = sv_port;
-					pre_time[0] = ptime;
-					return 1;
+				strcpy(pre_tcp_syn[0], cmp_exp);
+				pre_tcp_syn_time = ptime;
+				return 1;
+
+			}else if(strcmp(flag, "ACK") == 0){
+				if(strcmp(cmp_exp, pre_tcp_ack[0]) == 0){
+					if(ptime <= pre_tcp_ack_time + samplesec*2){
+						cout << "cut " << proto << flag << sv_port << ptime << endl;
+						return 0;
+					}
 				}
-				return 0;
+				strcpy(pre_tcp_ack[0], cmp_exp);
+				pre_tcp_ack_time = ptime;
+				return 1;
+
+			}else if(strcmp(flag, "SYN/ACK") == 0){
+				if(strcmp(cmp_exp, pre_tcp_synack[0]) == 0){
+					if(ptime <= pre_tcp_synack_time + samplesec){
+						cout << "cut " << proto << flag << sv_port << ptime << endl;
+						return 0;
+					}
+				}
+				strcpy(pre_tcp_synack[0], cmp_exp);
+				pre_tcp_synack_time = ptime;
+				return 1;
+
+			}else{
+				if(strcmp(cmp_exp, pre_tcp_other[0]) == 0){
+					if(ptime <= pre_tcp_other_time + samplesec){
+						cout << "cut " << proto << flag << sv_port << ptime << endl;
+						return 0;
+					}
+				}
+				strcpy(pre_tcp_other[0], cmp_exp);
+				pre_tcp_other_time = ptime;
+				return 1;
+
 			}
-		}else{	
-			strcpy(pre_clip[0], cl_ip);
-			strcpy(pre_protocol[0], proto);
-			strcpy(pre_flag[0], flag);
-			pre_svport[0] = sv_port;
-			pre_time[0] = ptime;
+		}else if(strcmp(proto, "UDP") == 0){
+			if(strcmp(cmp_exp, pre_udp[0]) == 0){
+				if(ptime <= pre_udp_time + samplesec){
+					cout << "cut " << proto << sv_port << ptime << endl;
+					return 0;
+				}
+
+			}
+			strcpy(pre_udp[0], cmp_exp);
+			pre_udp_time = ptime;
 			return 1;
+
+		}else if(strcmp(proto, "ICMP") == 0){
+			if(strcmp(cmp_exp, pre_icmp[0]) == 0){
+				if(ptime <= pre_icmp_time + samplesec){
+					cout << "cut " << proto << sv_port << ptime << endl;
+					return 0;
+				}
+			}
+			strcpy(pre_icmp[0], cmp_exp);
+			pre_icmp_time = ptime;
+			return 1;
+
+		}else{
+			if(strcmp(cmp_exp, pre_other[0]) == 0){
+				if(ptime <= pre_other_time + samplesec){
+					cout << "cut " << proto << sv_port << ptime << endl;
+					return 0;
+				}
+			}
+			strcpy(pre_other[0], cmp_exp);
+			pre_other_time = ptime;
+			return 1;
+
 		}
 	}else{
-		if(strcmp(cl_ip, pre_clip[1]) == 0 && strcmp(proto, pre_protocol[1]) == 0 && strcmp(flag, pre_flag[1]) == 0){
-			if(sv_port == pre_svport[1]){
-				if(strcmp(flag, "ACK") == 0 && ptime <= pre_time[1] + 300) cout << "cut1 " << proto << " " << flag << endl;
-				else if(ptime <= pre_time[1] + 10) cout << "cut2 " << proto << " " << flag << endl;
-				else{
-					strcpy(pre_clip[1], cl_ip);
-					strcpy(pre_protocol[1], proto);
-					strcpy(pre_flag[1], flag);
-					pre_svport[1] = sv_port;
-					pre_time[1] = ptime;
-					return 1;
+		//receive
+		if(strcmp(proto, "TCP") == 0){
+			if(strcmp(flag, "SYN") == 0){
+				if(strcmp(cmp_exp, pre_tcp_syn[1]) == 0){
+					if(ptime <= pre_tcp_syn_time + samplesec){
+						cout << "cut " << proto << flag << sv_port << ptime << endl;
+						return 0;
+					}
 				}
-				return 0;
-			}else if(sv_port -10 <= pre_svport[1] && sv_port + 10 >= pre_svport[1]){
-				if(ptime <= pre_time[1] + 10) cout << "cut3 " << proto << " " << flag << endl;
-				else{
-					strcpy(pre_clip[1], cl_ip);
-					strcpy(pre_protocol[1], proto);
-					strcpy(pre_flag[1], flag);
-					pre_svport[1] = sv_port;
-					pre_time[1] = ptime;
-					return 1;
+				strcpy(pre_tcp_syn[1], cmp_exp);
+				pre_tcp_syn_time = ptime;
+				return 1;
+
+			}else if(strcmp(flag, "ACK") == 0){
+				if(strcmp(cmp_exp, pre_tcp_ack[1]) == 0){
+					if(ptime <= pre_tcp_ack_time + samplesec*2){
+						cout << "cut " << proto << flag << sv_port << ptime << endl;
+						return 0;
+					}
 				}
-				return 0;
+				strcpy(pre_tcp_ack[1], cmp_exp);
+				pre_tcp_ack_time = ptime;
+				return 1;
+
+			}else if(strcmp(flag, "SYN/ACK") == 0){
+				if(strcmp(cmp_exp, pre_tcp_synack[1]) == 0){
+					if(ptime <= pre_tcp_synack_time + samplesec){
+						cout << "cut " << proto << flag << sv_port << ptime << endl;
+						return 0;
+					}
+				}
+				strcpy(pre_tcp_synack[1], cmp_exp);
+				pre_tcp_synack_time = ptime;
+				return 1;
+
+			}else{
+				if(strcmp(cmp_exp, pre_tcp_other[1]) == 0){
+					if(ptime <= pre_tcp_other_time + samplesec){
+						cout << "cut " << proto << flag << sv_port << ptime << endl;
+						return 0;
+					}
+				}
+				strcpy(pre_tcp_other[1], cmp_exp);
+				pre_tcp_other_time = ptime;
+				return 1;
+
 			}
-		}else{	
-			strcpy(pre_clip[1], cl_ip);
-			strcpy(pre_protocol[1], proto);
-			strcpy(pre_flag[1], flag);
-			pre_svport[1] = sv_port;
-			pre_time[1] = ptime;
+		}else if(strcmp(proto, "UDP") == 0){
+			if(strcmp(cmp_exp, pre_udp[1]) == 0){
+				if(ptime <= pre_udp_time + samplesec){
+					cout << "cut " << proto << sv_port << ptime << endl;
+					return 0;
+				}
+			}
+			strcpy(pre_udp[1], cmp_exp);
+			pre_udp_time = ptime;
 			return 1;
+
+		}else if(strcmp(proto, "ICMP") == 0){
+			if(strcmp(cmp_exp, pre_icmp[1]) == 0){
+				if(ptime <= pre_icmp_time + samplesec){
+					cout << "cut " << proto << sv_port << ptime << endl;
+					return 0;
+				}
+			}
+			strcpy(pre_icmp[1], cmp_exp);
+			pre_icmp_time = ptime;
+			return 1;
+
+		}else{
+			if(strcmp(cmp_exp, pre_other[1]) == 0){
+				if(ptime <= pre_other_time + samplesec){
+					cout << "cut " << proto << sv_port << ptime << endl;
+					return 0;
+				}
+			}
+			strcpy(pre_other[1], cmp_exp);
+			pre_other_time = ptime;
+			return 1;
+
 		}
 	}
 
