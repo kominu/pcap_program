@@ -44,9 +44,11 @@ int main(int argc, char *argv[]){
 	char *dev, errbuf[PCAP_ERRBUF_SIZE], hostname[256];
 	int port = 20000;
 	//char *sock_ip = "54.64.112.212";
-	char *sock_ip = "172.31.19.205";
+	char *sock_ip = "172.31.19.205";//aws server1
+	//char *sock_ip = "172.31.30.244";//aws proxy
 	//char *dst_ip = "119.172.116.86";
-	char *dst_ip = "172.31.19.205";
+	char *dst_ip = "172.31.19.205";//aws server1
+	//char *dst_ip = "172.31.30.244";//aws proxy
 	pcap_t *handle;
 	struct pcap_pkthdr header;
 	struct in_addr ip_addr;
