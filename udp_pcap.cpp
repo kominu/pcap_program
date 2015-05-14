@@ -145,18 +145,20 @@ int main(int argc, char *argv[]){
 		fprintf(stderr, "IPアドレスとネットマスクの取得に失敗しました%s\n", errbuf);
 		exit(1);
 	}else{
+		if(argc == 1){
 		strcpy(my_ip_copy, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 		//strcpy(my_ip_copy, inet_ntoa(ip_addr));
 		//if(argc == 1) strcpy(my_ip_copy, sock_ip);
-		//else if(argc == 2) strcpy(my_ip_copy, argv[2]);
+		}else if(argc == 3) strcpy(my_ip_copy, argv[2]);
 		cout << "IP:" << my_ip_copy << endl;
 	}
 
 	/* socket設定の続き ipアドレスが必要なため */
-	sock_ip = dst_ip = my_ip_copy;
+	sock_ip =  my_ip_copy;
+	//strcpy(dst_ip, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 	inet_aton(sock_ip, &me.sin_addr);
 	inet_aton(dst_ip, &distination.sin_addr);
-	bind(sock, (struct sockaddr *)&me, sizeof(me));
+	bind(sock, (struct sockaddr *)&distination, sizeof(distination));
 
 	/* ディバイスをオープン(非プロミスキャスモード) */
 	if(argc == 1) handle = pcap_open_live(dev, 64, 1, 10000, errbuf);
@@ -518,7 +520,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 			}
 		}else{
 			cerr << "Cannot find ip:" << my_ip_copy << endl;
-			cerr << "src(" << inet_ntoa(ip->ip_src) << "), dst(" << inet_ntoa(ip->ip_dst) << ")" << endl;
+			cerr << "src(" << ip_src_copy << "), dst(" << ip_dst_copy << ")" << endl;
 		}
 
 		/* 見栄えを良くするためここでヘッダ長のエラーを報告 */
