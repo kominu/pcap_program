@@ -47,6 +47,7 @@ int main(int argc, char *argv[]){
 	char pcap_name[20] = "log.pcap";
 	char *dev, errbuf[PCAP_ERRBUF_SIZE], hostname[256];
 	int port = 20000;
+	int send_port = 30000;
 	//char *sock_ip = "54.64.112.212";
 	//char *sock_ip = "172.31.19.205";//aws server1
 	//char *sock_ip = "172.31.30.244";//aws proxy
@@ -99,7 +100,8 @@ int main(int argc, char *argv[]){
 	bzero((char *)&me, sizeof(me));
 	bzero((char *)&distination, sizeof(distination));
 	me.sin_family = distination.sin_family = AF_INET;
-	me.sin_port = distination.sin_port = htons(port);
+	me.sin_port = htons(port);
+	distination.sin_port = htons(send_port);
 	/* 続きはlookupnetの後に記述（ipアドレスが必要なため) */
 	//bcopy(host->h_addr, (char *)&me.sin_addr, host->h_length);
 	//if(connect(sock, (struct sockaddr *)&me, sizeof(me)) < 0){
@@ -160,7 +162,7 @@ int main(int argc, char *argv[]){
 	//strcpy(dst_ip, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 	inet_aton(sock_ip, &me.sin_addr);
 	inet_aton(dst_ip, &distination.sin_addr);
-	bind(sock, (struct sockaddr *)&distination, sizeof(distination));
+	bind(sock, (struct sockaddr *)&me, sizeof(me));
 
 	/* ディバイスをオープン(非プロミスキャスモード) */
 	if(argc == 1) handle = pcap_open_live(dev, 64, 1, 10000, errbuf);
