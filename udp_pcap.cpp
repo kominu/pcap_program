@@ -31,6 +31,7 @@ bpf_u_int32 my_nmask;
 char my_ip_copy[32];
 int sock, num;
 struct sockaddr_in me, distination;
+pcap_dumper_t *dumpfile;
 /*
  * 直前のip, port, protocol, flag, 経過時間と比較し、
  * 送るパケットの圧縮をはかる
@@ -43,6 +44,7 @@ int pre_tcp_syn_time, pre_tcp_ack_time, pre_tcp_synack_time, pre_tcp_other_time,
 int main(int argc, char *argv[]){
 	char cap_name[20] = "cap_data.csv";
 	char err_name[20] = "err_data.csv";
+	char pcap_name[20] = "log.pcap";
 	char *dev, errbuf[PCAP_ERRBUF_SIZE], hostname[256];
 	int port = 20000;
 	//char *sock_ip = "54.64.112.212";
@@ -190,7 +192,13 @@ int main(int argc, char *argv[]){
 			cerr << "error in sendto" << endl;
 		}
 	}
-
+	
+	//logファイルを開く
+	dumpfile = pcap_dump_open(handle, pcap_name);
+	if(dumpfile == NULL){
+		fprintf(stderr, "pcap_nameを開けませんでした\n");
+		return -1;
+	}
 	/* loop */
 	if(pcap_loop(handle, -1, got_packet, NULL)<0){
 		fprintf(stderr, "キャプチャに失敗:%s\n", errbuf);
@@ -386,6 +394,9 @@ int checkpre(char *cl_ip, char *proto, char *flag, int sv_port, int ptime, int s
 
 
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
+	
+	/* logファイルに書き込む */
+	pcap_dump((unsigned char *)dumpfile, header, packet);
 
 	/* とりあえずコピペ */
 
