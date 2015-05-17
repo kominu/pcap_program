@@ -57,8 +57,8 @@ int main(int argc, char *argv[]){
 	//struct in_addr ip_addr;
 	struct hostent *host;
 	char message[256];
-	//char filter_exp[] = "not port 20000";
-	char filter_exp[] = "";
+	char filter_exp[] = "not udp src port 20000";
+	//char filter_exp[] = "";
 	struct bpf_program fp;
 	socklen_t addrlen;
 	struct ifreq ifr;
