@@ -218,6 +218,9 @@ int main(int argc, char *argv[]){
 		else if(argc == 5){
 		 strcpy(my_ip_copy, argv[2]);
 			sprintf(filter_exp2, "%s and host %s", filter_exp, my_ip_copy);
+		}else if(argc == 4 && s_state == 1){
+			 strcpy(my_ip_copy, argv[2]);
+			sprintf(filter_exp2, "%s and host %s", filter_exp, my_ip_copy);
 		}else if(argc == 3 && s_state == 0){
 			 strcpy(my_ip_copy, argv[2]);
 			sprintf(filter_exp2, "%s and host %s", filter_exp, my_ip_copy);

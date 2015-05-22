@@ -31,16 +31,16 @@ int main(int argc, char *argv[]){
 	struct pcap_pkthdr header;
 	char fname[30];
 
-	if(argc >= 2){
+	if(argc >= 3){
 		cout << "処理を開始" << endl;
-		sprintf(fname, "result:%s.txt", argv[1]);
+		sprintf(fname, "result:%s.txt", argv[2]);
 		fout.open(fname, ios_base::out);
 		if(!fout){
 			cout << "ファイルを開けません：" << fname << endl;
 			exit(1);
 		}
-		if(argc == 3){
-			if(strcmp(argv[2], "-i") == 0) state = 1;
+		if(argc == 4){
+			if(strcmp(argv[3], "-i") == 0) state = 1;
 		}
 		if((handle = pcap_open_offline(argv[1], errbuf)) == NULL){
 			fprintf(stderr, "pcap_open_offlineに失敗:%s\n", errbuf);
