@@ -212,20 +212,18 @@ int main(int argc, char *argv[]){
 	/* ネットワークアドレスとネットマスクを取得 */
 	if(pcap_lookupnet(dev, &my_addr, &my_nmask, errbuf)<0){
 		fprintf(stderr, "IPアドレスとネットマスクの取得に失敗しました%s\n", errbuf);
-		exit(1);
+		//exit(1);
 	}else{
 		if(mode_state == 1) strcpy(my_ip_copy, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 		else if(argc == 5){
-		 strcpy(my_ip_copy, argv[2]);
-			sprintf(filter_exp2, "%s and host %s", filter_exp, my_ip_copy);
+			strcpy(my_ip_copy, argv[2]);
 		}else if(argc == 4 && s_state == 1){
 			 strcpy(my_ip_copy, argv[2]);
-			sprintf(filter_exp2, "%s and host %s", filter_exp, my_ip_copy);
 		}else if(argc == 3 && s_state == 0){
 			 strcpy(my_ip_copy, argv[2]);
-			sprintf(filter_exp2, "%s and host %s", filter_exp, my_ip_copy);
 		}else strcpy(my_ip_copy, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 		cout << "IP:" << my_ip_copy << endl;
+		sprintf(filter_exp2, "%s and host %s", filter_exp, my_ip_copy);
 	}
 
 	/* socket設定の続き ipアドレスが必要なため */
@@ -233,7 +231,6 @@ int main(int argc, char *argv[]){
 	//strcpy(dst_ip, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 	inet_aton(sock_ip, &me.sin_addr);
 	inet_aton(dst_ip, &distination.sin_addr);
-	cout << "hello debug" << endl;
 	bind(sock, (struct sockaddr *)&me, sizeof(me));
 
 	/* ディバイスをオープン(非プロミスキャスモード) */
