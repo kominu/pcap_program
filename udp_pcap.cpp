@@ -158,7 +158,7 @@ int main(int argc, char *argv[]){
 	}
 
 	/* socket設定の続き ipアドレスが必要なため */
-	sock_ip =  my_ip_copy;
+	sock_ip =  inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
 	//strcpy(dst_ip, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 	inet_aton(sock_ip, &me.sin_addr);
 	inet_aton(dst_ip, &distination.sin_addr);
