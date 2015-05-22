@@ -3,6 +3,7 @@
 #include <cstring>
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <net/if.h>
@@ -22,13 +23,22 @@ ips ip_addrs[1000000];
 ips top3[3];
 int ip_count = 0;
 int state = 0;//0:通常 1:冗長モード
+ofstream fout;
 
 int main(int argc, char *argv[]){
 	pcap_t *handle;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	struct pcap_pkthdr header;
+	char fname[30];
 
 	if(argc >= 2){
+		cout << "処理を開始" << endl;
+		sprintf(fname, "result:%s.txt", argv[1]);
+		fout.open(fname, ios_base::out);
+		if(!fout){
+			cout << "ファイルを開けません：" << fname << endl;
+			exit(1);
+		}
 		if(argc == 3){
 			if(strcmp(argv[2], "-i") == 0) state = 1;
 		}
@@ -41,6 +51,7 @@ int main(int argc, char *argv[]){
 		}
 		pcap_close(handle);
 		dump_ips();
+		fout.close();
 		cout << "finish" << endl;
 		return 0;
 	}else{
@@ -132,5 +143,6 @@ void dump_ips(){
 	}
 	for(i = 0;i < 3;i++){
 		cout << i + 1 << "->" << top3[i].ip_name << ", " << top3[i].cnt << endl;
+		fout << i + 1 << "->" << top3[i].ip_name << ", " << top3[i].cnt << endl;
 	}
 }
