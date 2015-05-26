@@ -20,6 +20,8 @@ int state = 0;//0:通常 1:冗長モード 2:パイプモード
 ofstream fout;
 map<string, int>ips;
 map<string, int>::iterator p_ips;
+map<int, string, greater<int> >ips2;
+map<int, string, greater<int> >::iterator p_ips2;
 int rank;
 
 int main(int argc, char *argv[]){
@@ -30,7 +32,7 @@ int main(int argc, char *argv[]){
 	rank = 1;
 	if(argc >= 3){
 		cout << "処理を開始" << endl;
-		sprintf(fname, "result:%s.txt", argv[2]);
+		sprintf(fname, "r%s.txt", argv[2]);
 		fout.open(fname, ios_base::out);
 		if(!fout){
 			cout << "ファイルを開けません：" << fname << endl;
@@ -38,15 +40,15 @@ int main(int argc, char *argv[]){
 		}
 		if(argc == 4){
 			if(strcmp(argv[3], "-i") == 0) state = 1;
-			if(strcmp(argv[3], "-p")) state = 2;
+			if(strcmp(argv[3], "-p") == 0) state = 2;
 		}else if(argc == 5){
-			if(strcmp(argv[4], "-p")) state = 2;
-			else if(strcmp(argv[3], "-p")){
+			if(strcmp(argv[4], "-p") == 0) state = 2;
+			else if(strcmp(argv[3], "-p") == 0){
 				 state = 2;
 				rank = atoi(argv[4]);
 			}
 		}else if(argc == 6){
-			if(strcmp(argv[4], "-p")){
+			if(strcmp(argv[4], "-p") == 0){
  state = 2;
 				rank = atoi(argv[4]);
 			}
@@ -54,7 +56,8 @@ int main(int argc, char *argv[]){
 		if((handle = pcap_open_offline(argv[1], errbuf)) == NULL){
 			fprintf(stderr, "pcap_open_offlineに失敗:%s\n", errbuf);
 		}
-		if(pcap_loop(handle, -1, ip_analysis, NULL)<0){
+		if(pcap_loop(handle, 200000, ip_analysis, NULL)<0){
+			//200000回試行
 			fprintf(stderr, "pcap_loopに失敗:%s\n", errbuf);
 			exit(1);
 		}
@@ -83,25 +86,27 @@ void ip_analysis(u_char *args, const struct pcap_pkthdr *header, const u_char *p
 	size_ip = IP_HL(ip)*4;
 	
 	ips[inet_ntoa(ip->ip_src)]++;
-	if(ip_count++ >= 10000){
-		dump_ips();
-		exit(1);
-	}
-	if(state == 1) cout << ip_count << ":" << inet_ntoa(ip->ip_src) << endl;
+	if(state == 1) cout << ip_count++ << ":" << inet_ntoa(ip->ip_src) << endl;
 }
 
 void dump_ips(){
 	int i;
 	cout << "IPアドレス：回数" << endl;
 	p_ips = ips.begin();
+	while(p_ips != ips.end()){
+		ips2.insert(pair<int, string>(p_ips->second, p_ips->first));
+		p_ips++;
+	}
+	p_ips2 = ips2.begin();
 	if(state == 2){
 		for(i = 0;i < rank;i++){
-			if(p_ips++ == ips.end()) break;
+			if(++p_ips2 == ips2.end()) break;
 		}
-		cout << p_ips->first;
+		cout << p_ips2->first;
 	}else{
 		for(i = 0;i < 10;i++){
-			cout << p_ips->first << ":" << p_ips->second << endl;
+			cout << p_ips2->second << ":" << p_ips2->first << endl;
+			p_ips2++;
 		}
 	}
 }
