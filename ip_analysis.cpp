@@ -106,6 +106,8 @@ void dump_ips(){
 	}else{
 		for(i = 0;i < 10;i++){
 			cout << p_ips2->second << ":" << p_ips2->first << endl;
+			fout << p_ips2->second << ":" << p_ips2->first << endl;
+			
 			p_ips2++;
 		}
 	}
