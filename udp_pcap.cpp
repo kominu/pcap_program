@@ -14,6 +14,7 @@
 #include <net/if.h>
 #include <netdb.h>
 #include <ctype.h>
+#include <map>
 
 using namespace std;
 #define MAX_LEN 256 // fgetsで読み込む最大文字数
@@ -35,6 +36,9 @@ pcap_dumper_t *dumpfile;
 int s_count, s_rate;
 int s_state;//0:通常、1:サンプリングモード
 int mode_state;//offなら0、onなら1
+map<string, int>iplist;
+map<string, int>::iterator p_iplist;
+
 /*
  * 直前のip, port, protocol, flag, 経過時間と比較し、
  * 送るパケットの圧縮をはかる
@@ -578,12 +582,15 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 			strcpy(ip_src_copy, inet_ntoa(ip->ip_src));
 			strcpy(ip_dst_copy, inet_ntoa(ip->ip_dst));
 
+			iplist[ip_src_copy]++;
+			iplist[ip_dst_copy]++;
+
 			if(strcmp(ip_src_copy, my_ip_copy) == 0){
 				if(checkpre(ip_dst_copy, protocol_name, tcp_flag, ntohs(tcp->th_sport), e_time, 0)){
 					cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
-					cout << "    ・From:" << inet_ntoa(ip->ip_src) << "(" << ntohs(tcp->th_sport) << ")" << endl;
-					cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << "(" << ntohs(tcp->th_dport) << ")" << endl;
+					cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << ntohs(tcp->th_sport) << "(" << iplist[ip_src_copy] << ")" << endl;
+					cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << ntohs(tcp->th_dport) << "(" << iplist[ip_dst_copy] << ")" << endl;
 					cout << "    ・Time:" << e_time << "milisec" << endl;
 					cout << "      flag:" << tcp_flag << endl;
 					sprintf(pcap_data, "%d,%s,%d,%s,%s,%d,%d,%d,true,%s", count, protocol_name, c_length, ip_src_copy, ip_dst_copy, ntohs(tcp->th_sport), ntohs(tcp->th_dport), e_time, tcp_flag);
@@ -598,8 +605,8 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 
 					cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
-					cout << "    ・From:" << inet_ntoa(ip->ip_src) << "(" << ntohs(tcp->th_sport) << ")" << endl;
-					cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << "(" << ntohs(tcp->th_dport) << ")" << endl;
+					cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << ntohs(tcp->th_sport) << "(" << iplist[ip_src_copy] << ")" << endl;
+					cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << ntohs(tcp->th_dport) << "(" << iplist[ip_dst_copy] << ")" << endl;
 					cout << "    ・Time:" << e_time << "milisec" << endl;
 					cout << "      flag:" << tcp_flag << endl;
 					sprintf(pcap_data, "%d,%s,%d,%s,%s,%d,%d,%d,false,%s", count, protocol_name, c_length, ip_dst_copy, ip_src_copy, ntohs(tcp->th_dport), ntohs(tcp->th_sport), e_time, tcp_flag);
