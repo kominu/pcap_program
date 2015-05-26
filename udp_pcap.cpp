@@ -33,7 +33,7 @@ char my_ip_copy[32];
 int sock, num;
 struct sockaddr_in me, distination;
 pcap_dumper_t *dumpfile;
-int s_count, s_rate;
+int s_rate;
 int s_state;//0:通常、1:サンプリングモード
 int mode_state;//offなら0、onなら1
 map<string, int>iplist;
@@ -131,7 +131,6 @@ int main(int argc, char *argv[]){
 			cout << "引数が多すぎます" << endl;
 			exit(1);
 	}
-	s_count = 0;
 	if(mode_state == 1) cout << "online mode" << endl;
 	else cout << "offline mode" << endl;
 	if(s_state == 1) cout << "sampling mode, rate : " << s_rate << endl;
@@ -470,13 +469,12 @@ int checkpre(char *cl_ip, char *proto, char *flag, int sv_port, int ptime, int s
 
 int sampling(){
 	if(s_state == 1){
-		if(s_count % s_rate == 0) return 1;
+		if(rand() % s_rate == 0) return 1;
 		else return 0;
 	}else return 1;
 }
 
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
-	s_count++;
 	if(sampling() == 0){
 	}else{
 		/* logファイルに書き込む */
