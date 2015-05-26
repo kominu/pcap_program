@@ -2,3 +2,5 @@
 pcap
 *.pcap
 a.out
+analysis
+*.txt
