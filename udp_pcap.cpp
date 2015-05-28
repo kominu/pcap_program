@@ -237,7 +237,7 @@ int main(int argc, char *argv[]){
 	bind(sock, (struct sockaddr *)&me, sizeof(me));
 
 	/* ディバイスをオープン(非プロミスキャスモード) */
-	if(mode_state == 1) handle = pcap_open_live(dev, 64, 1, 10000, errbuf);
+	if(mode_state == 1) handle = pcap_open_live(dev, 64, 0, 100, errbuf);
 	else handle = pcap_open_offline(argv[1], errbuf);
 	if(handle == NULL){
 		fprintf(stderr, "デバイス「%s」を開けません:%s\n", dev, errbuf);
