@@ -1,3 +1,3 @@
 #!/bin/sh
 
-g++ -lpcap -o pcap udp_pcap.cpp
+g++ udp_pcap.cpp -o pcap -lpcap
