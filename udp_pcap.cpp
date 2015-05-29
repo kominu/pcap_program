@@ -15,6 +15,12 @@
 #include <netdb.h>
 #include <ctype.h>
 #include <map>
+#include <mysql/mysql.h>
+
+#define DBHOST "kominu.com"
+#define DBUSER "pcap"
+#define DBPASS ""
+#define DBNAME "pcap_db"
 
 using namespace std;
 #define MAX_LEN 256 // fgetsで読み込む最大文字数
@@ -36,8 +42,10 @@ pcap_dumper_t *dumpfile;
 int s_rate;
 int s_state;//0:通常、1:サンプリングモード
 int mode_state;//offなら0、onなら1
+int d_state;//database:1, not database:0
 map<string, int>iplist;
 map<string, int>::iterator p_iplist;
+MYSQL *conn;
 
 /*
  * 直前のip, port, protocol, flag, 経過時間と比較し、
@@ -73,6 +81,7 @@ int main(int argc, char *argv[]){
 	struct bpf_program fp;
 	socklen_t addrlen;
 	struct ifreq ifr;
+	char create_query[50];
 	/* const u_char *packet; */
 	switch(argc){
 		case 1:
@@ -85,8 +94,8 @@ int main(int argc, char *argv[]){
 				s_state = 1;
 				s_rate = 10;
 			}else{
-			mode_state = 0;
-			s_state = 0;
+				mode_state = 0;
+				s_state = 0;
 			}
 			break;
 		case 3:
@@ -134,7 +143,7 @@ int main(int argc, char *argv[]){
 	if(mode_state == 1) cout << "online mode" << endl;
 	else cout << "offline mode" << endl;
 	if(s_state == 1) cout << "sampling mode, rate : " << s_rate << endl;
-	
+
 	/* pre_*を初期化 */
 
 	strcpy(pre_tcp_syn[0], "0");
@@ -152,15 +161,8 @@ int main(int argc, char *argv[]){
 	strcpy(pre_icmp[1], "0");
 	strcpy(pre_other[1], "0");
 	pre_tcp_syn_time = pre_tcp_ack_time = pre_tcp_synack_time = pre_tcp_other_time = pre_udp_time = pre_icmp_time = pre_other_time = 0; 
-	/*
-	   strcpy(pre_clip[0], "0");
-	   strcpy(pre_clip[1], "0");
-	   strcpy(pre_protocol[0], "0");
-	   strcpy(pre_protocol[1], "0");
-	   strcpy(pre_flag[0], "0");
-	   strcpy(pre_flag[1], "0");
-	   pre_svport[0] = pre_svport[1] = pre_time[0] = pre_time[1] = 0;
-	   */
+
+
 	/* とにかくUDPで送る */
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
 	gethostname(hostname, sizeof(hostname));
@@ -221,9 +223,9 @@ int main(int argc, char *argv[]){
 		else if(argc == 5){
 			strcpy(my_ip_copy, argv[2]);
 		}else if(argc == 4 && s_state == 1){
-			 strcpy(my_ip_copy, argv[2]);
+			strcpy(my_ip_copy, argv[2]);
 		}else if(argc == 3 && s_state == 0){
-			 strcpy(my_ip_copy, argv[2]);
+			strcpy(my_ip_copy, argv[2]);
 		}else strcpy(my_ip_copy, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 		cout << "IP:" << my_ip_copy << endl;
 		sprintf(filter_exp2, "%s and host %s", filter_exp, my_ip_copy);
@@ -253,6 +255,19 @@ int main(int argc, char *argv[]){
 		cerr << "cannot import filter " << endl;
 		return(2);
 	}
+	/* mysql */
+	conn = mysql_init(NULL);
+	if(mysql_real_connect(conn, DBHOST, DBUSER, DBPASS, DBNAME, 3306, NULL, 0)){
+		cout << "using mysql" << endl;
+		d_state = 1;
+		sprintf(create_query, "create table `%s`(id int not null auto_increment, ip varchar(20) not null, cnt int not null, unique(ip), primary key(id))", sock_ip);
+		if(!mysql_query(conn, create_query)){
+			cout << create_query << endl;
+		}
+	}else{
+		cout << "not using mysql" << endl;
+		d_state = 0;
+	}
 
 	addrlen = sizeof(distination);
 	if(recvfrom(sock, message, strlen(message), 0, (struct sockaddr *)&distination, &addrlen) > 0){
@@ -280,6 +295,7 @@ int main(int argc, char *argv[]){
 		exit(1);
 	}
 
+	if(d_state == 1) mysql_close(conn);
 	pcap_close(handle);
 	cap_csv.close();
 	err_csv.close();
@@ -504,15 +520,16 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		}
 		long e_time = header->ts.tv_sec*1000 + header->ts.tv_usec/1000 - s_time;
 		char protocol_name[6];     
-		char lsof[256] = "lsof -Fc -i:";
-		char src_port[256] = {'\0'};
-		int sport;
-		int dport;
-		char process[MAX_LEN];
+		//char process[MAX_LEN];
 		char ip_src_copy[32];
 		char ip_dst_copy[32];
 		char tcp_flag[16];
 		char pcap_data[256];
+		char get_query[50];
+		char post_query[50];
+		MYSQL_RES *res;
+		MYSQL_ROW row;
+		row = NULL;
 
 		/* とりあえずコピペ */
 
@@ -585,6 +602,29 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 
 			if(strcmp(ip_src_copy, my_ip_copy) == 0){
 				if(checkpre(ip_dst_copy, protocol_name, tcp_flag, ntohs(tcp->th_sport), e_time, 0)){
+					/* mysql */
+					if(d_state == 1){
+						sprintf(get_query, "select `%s`.cnt from `%s` where ip = '%s'", ip_src_copy, ip_src_copy,  ip_dst_copy);
+						if(mysql_query(conn, get_query)){
+							fprintf(stderr, "%s\n", mysql_error(conn));
+							exit(1);
+						}
+						res = mysql_use_result(conn);
+						if((row = mysql_fetch_row(res)) == NULL){
+							sprintf(post_query, "insert into `%s`(ip, cnt) values('%s', 1)",ip_src_copy, ip_dst_copy);
+
+						}else{
+							sprintf(post_query, "update `%s` set cnt = cnt + 1 where ip = '%s'", ip_src_copy, ip_dst_copy);
+						}
+						mysql_free_result(res);
+						if(mysql_query(conn, post_query)){
+							fprintf(stderr, "%s\n", mysql_error(conn));
+							exit(1);
+						}
+						//mysql_free_result(res);
+					}
+
+
 					cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
 					cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << ntohs(tcp->th_sport) << "(" << iplist[ip_src_copy] << ")" << endl;
@@ -600,6 +640,28 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 				}
 			}else if(strcmp(ip_dst_copy, my_ip_copy) == 0){
 				if(checkpre(ip_src_copy, protocol_name, tcp_flag, ntohs(tcp->th_dport), e_time, 1)){
+					if(d_state == 1){
+						/* mysql */
+						sprintf(get_query, "select `%s`.cnt from `%s` where ip = '%s'", ip_dst_copy, ip_dst_copy, ip_src_copy);
+						if(mysql_query(conn, get_query)){
+							fprintf(stderr, "%s\n", mysql_error(conn));
+							exit(1);
+						}
+						res = mysql_use_result(conn);
+						if((row = mysql_fetch_row(res)) == NULL){
+							sprintf(post_query, "insert into `%s`(ip, cnt) values('%s', 1)", ip_dst_copy, ip_src_copy);
+
+						}else{
+							sprintf(post_query, "update `%s` set cnt = cnt + 1 where ip = '%s'", ip_dst_copy, ip_src_copy);
+						}
+						mysql_free_result(res);
+						if(mysql_query(conn, post_query)){
+							fprintf(stderr, "%s\n", mysql_error(conn));
+							exit(1);
+						}
+						//mysql_free_result(res);
+					}
+
 
 					cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 

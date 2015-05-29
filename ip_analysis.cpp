@@ -32,7 +32,7 @@ int main(int argc, char *argv[]){
 	rank = 1;
 	if(argc >= 3){
 		cout << "処理を開始" << endl;
-		sprintf(fname, "r%s.txt", argv[2]);
+		sprintf(fname, "result/%s_ip.txt", argv[2]);
 		fout.open(fname, ios_base::out);
 		if(!fout){
 			cout << "ファイルを開けません：" << fname << endl;
