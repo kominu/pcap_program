@@ -75,7 +75,7 @@ int main(int argc, char *argv[]){
 	//struct in_addr ip_addr;
 	struct hostent *host;
 	char message[256];
-	char filter_exp[] = "(not udp src port 20000)";
+	char filter_exp[] = "(not udp src port 20000) && (not (dst host kominu.com && port 3306))";
 	char filter_exp2[128];
 	//char filter_exp[] = "";
 	struct bpf_program fp;
