@@ -28,7 +28,8 @@ int main(int argc, char *argv[]){
 	pcap_t *handle;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	struct pcap_pkthdr header;
-	char fname[30];
+	char fname[50];
+	char pname[50];
 	rank = 1;
 	if(argc >= 3){
 		cout << "処理を開始" << endl;
@@ -53,7 +54,9 @@ int main(int argc, char *argv[]){
 				rank = atoi(argv[4]);
 			}
 		}
-		if((handle = pcap_open_offline(argv[1], errbuf)) == NULL){
+		if(argv[1][0] == '/' || argv[1][0] == '~') strcpy(pname, argv[1]);
+		else sprintf(pname, "pcap_files/%s", argv[1]);
+		if((handle = pcap_open_offline(pname, errbuf)) == NULL){
 			fprintf(stderr, "pcap_open_offlineに失敗:%s\n", errbuf);
 		}
 		if(pcap_loop(handle, 200000, ip_analysis, NULL)<0){
