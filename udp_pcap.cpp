@@ -603,7 +603,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 			if(strcmp(ip_src_copy, my_ip_copy) == 0){
 				if(checkpre(ip_dst_copy, protocol_name, tcp_flag, ntohs(tcp->th_sport), e_time, 0)){
 					/* mysql */
-					if(d_state == 1){
+					if(d_state == 1 && strcmp(ip_dst_copy, DBHOST) != 0){
 						sprintf(get_query, "select `%s`.cnt from `%s` where ip = '%s'", ip_src_copy, ip_src_copy,  ip_dst_copy);
 						if(mysql_query(conn, get_query)){
 							fprintf(stderr, "%s\n", mysql_error(conn));
@@ -640,7 +640,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 				}
 			}else if(strcmp(ip_dst_copy, my_ip_copy) == 0){
 				if(checkpre(ip_src_copy, protocol_name, tcp_flag, ntohs(tcp->th_dport), e_time, 1)){
-					if(d_state == 1){
+					if(d_state == 1 && strcmp(ip_src_copy, DBHOST) != 0){
 						/* mysql */
 						sprintf(get_query, "select `%s`.cnt from `%s` where ip = '%s'", ip_dst_copy, ip_dst_copy, ip_src_copy);
 						if(mysql_query(conn, get_query)){
