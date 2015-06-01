@@ -594,7 +594,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 			}
 			else if(tcp->th_flags & TH_SYN) strcpy(tcp_flag, "SYN");
 			else strcpy(tcp_flag, "missed flags");
-		}else strcpy(tcp_flag, "");
+		}else strcpy(tcp_flag, "-");
 
 		/* 以下コピペによるパケット分析 */
 
