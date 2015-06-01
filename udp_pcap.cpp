@@ -45,6 +45,7 @@ int s_state;//0:通常、1:サンプリングモード
 int mode_state;//offなら0、onなら1
 int d_state;//database:1, not database:0
 MYSQL *conn;
+int max_ip_count;
 
 /*
  * 直前のip, port, protocol, flag, 経過時間と比較し、
@@ -81,6 +82,7 @@ int main(int argc, char *argv[]){
 	socklen_t addrlen;
 	struct ifreq ifr;
 	char create_query[50];
+	max_ip_count = 0;
 	/* const u_char *packet; */
 	switch(argc){
 		mode_state = 1;
@@ -685,6 +687,15 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 			}else{
 				cerr << "Cannot find ip:" << my_ip_copy << endl;
 				cerr << "src(" << ip_src_copy << "), dst(" << ip_dst_copy << ")" << endl;
+			}
+			if(ip_cnt > max_ip_count){
+				max_ip_count = ip_cnt;
+				//cout << "IPカウントの最大値を更新" << endl;
+				char send_max[50];
+				sprintf(send_max, "max,%d", max_ip_count);
+				if(sendto(sock, send_max, strlen(send_max), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
+					cerr << "error in sendto" << endl;
+				}
 			}
 
 			/* 見栄えを良くするためここでヘッダ長のエラーを報告 */
