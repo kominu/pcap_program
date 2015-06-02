@@ -263,7 +263,7 @@ int main(int argc, char *argv[]){
 	if(mysql_real_connect(conn, DBHOST, DBUSER, DBPASS, DBNAME, 3306, NULL, 0)){
 		cout << "using mysql" << endl;
 		d_state = 1;
-		sprintf(create_query, "create table `%s`(id int not null auto_increment, ip varchar(20) not null, cnt int not null, unique(ip), primary key(id))", sock_ip);
+		sprintf(create_query, "create table `%s`(id int(20) not null auto_increment, ip varchar(20) not null, cnt int(20) not null, unique(ip), primary key(id))", sock_ip);
 		if(!mysql_query(conn, create_query)){
 			cout << create_query << endl;
 		}
@@ -534,7 +534,11 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		char tcp_flag[16];
 		char pcap_data[256];
 		char get_query[50];
-		char post_query[50];
+		char port_get_query[50];
+		char post_query[50];//IP
+		char port_post_query[50];//port
+		char port_post_query2[50];//port
+		char port_post_query3[50];//port
 		MYSQL_RES *res;
 		MYSQL_ROW row;
 		row = NULL;
@@ -628,6 +632,33 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 							exit(1);
 						}
 						//mysql_free_result(res);
+						sprintf(port_get_query, "describe `%s` `%d`", my_ip_copy, ntohs(tcp->th_sport));
+						if(mysql_query(conn, port_get_query)){
+							fprintf(stderr, "%s\n", mysql_error(conn));
+							exit(1);
+						}
+						res = mysql_use_result(conn);
+						if((row = mysql_fetch_row(res)) == NULL){
+
+							mysql_free_result(res);
+							sprintf(port_post_query, "alter table `%s` add column `%d` int(20) not null", my_ip_copy, ntohs(tcp->th_sport));
+							if(mysql_query(conn, port_post_query)){
+								fprintf(stderr, "%s\n", mysql_error(conn));
+								exit(1);
+							}
+							sprintf(port_post_query2, "update `%s` set `%d` = 0", my_ip_copy, ntohs(tcp->th_sport));
+							if(mysql_query(conn, port_post_query2)){
+								fprintf(stderr, "%s\n", mysql_error(conn));
+								exit(1);
+							}
+						}else mysql_free_result(res);
+						sprintf(port_post_query3, "update `%s` set `%d` = `%d` + 1 where ip = '%s'", my_ip_copy, ntohs(tcp->th_sport), ntohs(tcp->th_sport), ip_dst_copy);
+						//mysql_free_result(res);
+						if(mysql_query(conn, port_post_query3)){
+							fprintf(stderr, "%s\n", mysql_error(conn));
+							exit(1);
+						}
+						//mysql_free_result(res);
 					}
 
 
@@ -667,6 +698,33 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 							fprintf(stderr, "%s\n", mysql_error(conn));
 							exit(1);
 						}
+						sprintf(port_get_query, "describe `%s` `%d`", my_ip_copy, ntohs(tcp->th_dport));
+						if(mysql_query(conn, port_get_query)){
+							fprintf(stderr, "%s\n", mysql_error(conn));
+							exit(1);
+						}
+						res = mysql_use_result(conn);
+						if((row = mysql_fetch_row(res)) == NULL){
+
+							mysql_free_result(res);
+							sprintf(port_post_query, "alter table `%s` add column `%d` int(20) not null", my_ip_copy, ntohs(tcp->th_dport));
+							if(mysql_query(conn, port_post_query)){
+								fprintf(stderr, "%s\n", mysql_error(conn));
+								exit(1);
+							}
+							sprintf(port_post_query2, "update `%s` set `%d` = 0", my_ip_copy, ntohs(tcp->th_dport));
+							if(mysql_query(conn, port_post_query2)){
+								fprintf(stderr, "%s\n", mysql_error(conn));
+								exit(1);
+							}
+						}else mysql_free_result(res);
+						sprintf(port_post_query3, "update `%s` set `%d` = `%d` + 1 where ip = '%s'", my_ip_copy, ntohs(tcp->th_dport), ntohs(tcp->th_dport), ip_src_copy);
+						
+						if(mysql_query(conn, port_post_query3)){
+							fprintf(stderr, "%s\n", mysql_error(conn));
+							exit(1);
+						}
+						//mysql_free_result(res);
 						//mysql_free_result(res);
 					}
 
