@@ -85,8 +85,10 @@ int main(int argc, char *argv[]){
 	max_ip_count = 0;
 	/* const u_char *packet; */
 	switch(argc){
+		case 1:
 		mode_state = 1;
-		s_state = 0;
+		s_state = 1;
+		s_rate = 10;
 		break;
 		case 2:
 		if(strcmp(argv[1], "-s") == 0){
