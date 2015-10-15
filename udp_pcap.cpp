@@ -22,6 +22,7 @@
 #define DBUSER "pcap"
 #define DBPASS ""
 #define DBNAME "pcap_db"
+#define DBNAME2 "pcap_port_db"
 
 using namespace std;
 #define MAX_LEN 256 // fgetsで読み込む最大文字数
@@ -44,7 +45,9 @@ int s_rate;
 int s_state;//0:通常、1:サンプリングモード
 int mode_state;//offなら0、onなら1
 int d_state;//database:1, not database:0
+int d_state2;//database:1, not database:0
 MYSQL *conn;
+MYSQL *conn2;
 int max_ip_count;
 
 /*
@@ -82,6 +85,7 @@ int main(int argc, char *argv[]){
 	socklen_t addrlen;
 	struct ifreq ifr;
 	char create_query[50];
+	char create_port_query[50];
 	max_ip_count = 0;
 	/* const u_char *packet; */
 	switch(argc){
@@ -274,6 +278,19 @@ int main(int argc, char *argv[]){
 		d_state = 0;
 	}
 
+	conn2 = mysql_init(NULL);
+	if(mysql_real_connect(conn2, DBHOST, DBUSER, DBPASS, DBNAME2, 3306, NULL, 0)){
+		cout << "using mysql" << endl;
+		d_state2 = 1;
+		sprintf(create_port_query, "create table `%s`(id int(20) not null auto_increment, port int(20) not null, cnt int(20) not null, unique(port), primary key(id))", sock_ip);
+		if(!mysql_query(conn2, create_port_query)){
+			cout << create_port_query << endl;
+		}
+	}else{
+		cout << "not using mysql" << endl;
+		d_state2 = 0;
+	}
+
 	addrlen = sizeof(distination);
 	if(recvfrom(sock, message, strlen(message), 0, (struct sockaddr *)&distination, &addrlen) > 0){
 		cout << message << endl;
@@ -301,6 +318,7 @@ int main(int argc, char *argv[]){
 	}
 
 	if(d_state == 1) mysql_close(conn);
+	if(d_state2 == 1) mysql_close(conn);
 	pcap_close(handle);
 	cap_csv.close();
 	err_csv.close();
@@ -536,8 +554,10 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		char tcp_flag[16];
 		char pcap_data[256];
 		char get_query[50];
+		char get_query2[50];
 		char port_get_query[50];
 		char post_query[50];//IP
+		char post_query2[50];//IP
 		char port_post_query[50];//port
 		char port_post_query2[50];//port
 		char port_post_query3[50];//port
@@ -613,6 +633,27 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 			if(strcmp(ip_src_copy, my_ip_copy) == 0){
 				if(checkpre(ip_dst_copy, protocol_name, tcp_flag, ntohs(tcp->th_sport), e_time, 0)){
 					/* mysql */
+					/* port number */
+					if(d_state2 == 1 && strcmp(ip_dst_copy, DBHOST) != 0){
+						sprintf(get_query2, "select cnt from `%s` where port = %d", ip_src_copy, ntohs(tcp->th_sport));
+						if(mysql_query(conn2, get_query2)){
+							fprintf(stderr, "%s\n", mysql_error(conn2));
+							exit(1);
+						}
+						res = mysql_use_result(conn2);
+						if((row = mysql_fetch_row(res)) == NULL){
+							sprintf(post_query2, "insert into `%s`(port, cnt) values(%d, 1)", ip_src_copy, ntohs(tcp->th_sport));
+						}else{
+							sprintf(post_query2, "update `%s` set cnt = cnt + 1 where port = %d", ip_src_copy, ntohs(tcp->th_sport));
+						}
+						mysql_free_result(res);
+						if(mysql_query(conn2, post_query2)){
+							fprintf(stderr, "%s\n", mysql_error(conn2));
+							exit(1);
+						}
+					}
+
+					/* ip address */
 					if(d_state == 1 && strcmp(ip_dst_copy, DBHOST) != 0){
 						sprintf(get_query, "select cnt from `%s` where ip = '%s'", ip_src_copy,  ip_dst_copy);
 						if(mysql_query(conn, get_query)){
@@ -679,8 +720,28 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 				}
 			}else if(strcmp(ip_dst_copy, my_ip_copy) == 0){
 				if(checkpre(ip_src_copy, protocol_name, tcp_flag, ntohs(tcp->th_dport), e_time, 1)){
+					/* port number */
+					if(d_state2 == 1 && strcmp(ip_src_copy, DBHOST) != 0){
+						sprintf(get_query2, "select cnt from `%s` where port = %d", ip_dst_copy, ntohs(tcp->th_dport));
+						if(mysql_query(conn2, get_query2)){
+							fprintf(stderr, "%s\n", mysql_error(conn2));
+							exit(1);
+						}
+						res = mysql_use_result(conn2);
+						if((row = mysql_fetch_row(res)) == NULL){
+							sprintf(post_query2, "insert into `%s`(port, cnt) values(%d, 1)", ip_dst_copy, ntohs(tcp->th_dport));
+						}else{
+							sprintf(post_query2, "update `%s` set cnt = cnt + 1 where port = %d", ip_dst_copy, ntohs(tcp->th_dport));
+						}
+						mysql_free_result(res);
+						if(mysql_query(conn2, post_query2)){
+							fprintf(stderr, "%s\n", mysql_error(conn2));
+							exit(1);
+						}
+					}
+
 					if(d_state == 1 && strcmp(ip_src_copy, DBHOST) != 0){
-						/* mysql */
+						/* ip address */
 						sprintf(get_query, "select cnt from `%s` where ip = '%s'", ip_dst_copy, ip_src_copy);
 						if(mysql_query(conn, get_query)){
 							fprintf(stderr, "%s\n", mysql_error(conn));
