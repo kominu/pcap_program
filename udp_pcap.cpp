@@ -52,6 +52,8 @@ int max_ip_count;
 long old_e_time;
 char ip_best[128];
 char port_best[256];
+time_t start_time, last_time;
+char last_netstat[128];
 
 /*
  * 直前のip, port, protocol, flag, 経過時間と比較し、
@@ -91,67 +93,70 @@ int main(int argc, char *argv[]){
 	char create_port_query[50];
 	max_ip_count = 0;
 	old_e_time = 0;
+	start_time = time(NULL);
+	last_time = time(NULL);
+	strcpy(last_netstat, "netstat");
 
 	/* const u_char *packet; */
 	switch(argc){
 		case 1:
-		mode_state = 1;
-		s_state = 1;
-		s_rate = 10;
-		break;
+			mode_state = 1;
+			s_state = 1;
+			s_rate = 10;
+			break;
 		case 2:
-		if(strcmp(argv[1], "-s") == 0){
-			mode_state = 1;
-			s_state = 1;
-			s_rate = 10;
-		}else{
-			mode_state = 0;
-			s_state = 0;
-		}
-		break;
+			if(strcmp(argv[1], "-s") == 0){
+				mode_state = 1;
+				s_state = 1;
+				s_rate = 10;
+			}else{
+				mode_state = 0;
+				s_state = 0;
+			}
+			break;
 		case 3:
-		if(strcmp(argv[1], "-s") == 0){
-			mode_state = 1;
-			s_state = 1;
-			s_rate = atoi(argv[2]);
-		}else if(strcmp(argv[2], "-s") == 0){
-			mode_state = 0;
-			s_state = 1;
-			s_rate = 10;
-		}else{
-			mode_state = 0;
-			s_state = 0;
-		}
-		break;
+			if(strcmp(argv[1], "-s") == 0){
+				mode_state = 1;
+				s_state = 1;
+				s_rate = atoi(argv[2]);
+			}else if(strcmp(argv[2], "-s") == 0){
+				mode_state = 0;
+				s_state = 1;
+				s_rate = 10;
+			}else{
+				mode_state = 0;
+				s_state = 0;
+			}
+			break;
 		case 4:
-		if(strcmp(argv[2], "-s") == 0){
-			mode_state = 1;
-			s_state = 1;
-			s_rate = atoi(argv[3]);
-		}else if(strcmp(argv[3], "-s") == 0){
-			mode_state = 0;
-			s_state = 1;
-			s_rate = 10;
-		}else{
-			cout << "引数が多すぎます" << endl;
-			exit(1);
-		}
-		break;
+			if(strcmp(argv[2], "-s") == 0){
+				mode_state = 1;
+				s_state = 1;
+				s_rate = atoi(argv[3]);
+			}else if(strcmp(argv[3], "-s") == 0){
+				mode_state = 0;
+				s_state = 1;
+				s_rate = 10;
+			}else{
+				cout << "引数が多すぎます" << endl;
+				exit(1);
+			}
+			break;
 		case 5:
-		if(strcmp(argv[3], "-s") == 0){
-			mode_state = 0;
-			s_state = 1;
-			s_rate = atoi(argv[4]);
-		}else{
-			cout << "引数が多すぎます" << endl;
-			exit(1);
-		}
-		break;
+			if(strcmp(argv[3], "-s") == 0){
+				mode_state = 0;
+				s_state = 1;
+				s_rate = atoi(argv[4]);
+			}else{
+				cout << "引数が多すぎます" << endl;
+				exit(1);
+			}
+			break;
 		default:
-		mode_state = 1;
-		s_state = 0;
-		//cout << "引数が多すぎます" << endl;
-		//exit(1);
+			mode_state = 1;
+			s_state = 0;
+			//cout << "引数が多すぎます" << endl;
+			//exit(1);
 	}
 	if(mode_state == 1) cout << "online mode" << endl;
 	else cout << "offline mode" << endl;
@@ -280,6 +285,7 @@ int main(int argc, char *argv[]){
 		}
 	}else{
 		cout << "not using mysql" << endl;
+		fprintf(stderr, "%s\n", mysql_error(conn));
 		d_state = 0;
 	}
 
@@ -293,6 +299,7 @@ int main(int argc, char *argv[]){
 		}
 	}else{
 		cout << "not using mysql" << endl;
+		fprintf(stderr, "%s\n", mysql_error(conn));
 		d_state2 = 0;
 	}
 
@@ -522,7 +529,47 @@ int sampling(int count){
 	}else return 1;
 }
 
+void send_netstat(){
+	char *tok, *tok2;
+	char netstat_res[128];
+	char netstat_buf[512];
+	int split_count;
+	strcpy(netstat_res, "netstat");
+
+	FILE *nfp = popen("sudo netstat -tanp | grep LISTEN", "r");
+	while(fgets(netstat_buf, sizeof(netstat_buf), nfp)){
+		tok = strtok(netstat_buf, " ");
+		for(split_count = 0;tok != NULL;split_count++){
+			if(split_count == 3){
+				break;
+			}
+			tok = strtok(NULL, " ");
+		}
+		tok2 = strtok(tok, ":");
+		while(tok2 != NULL){
+			if(strlen(tok2) < 7){
+				strcat(netstat_res, ",");
+				strcat(netstat_res, tok2);
+			}
+			tok2 = strtok(NULL, ":");
+		}
+	}
+	if(strcmp(netstat_res, last_netstat) != 0){
+		if(sendto(sock, netstat_res, strlen(netstat_res), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
+			cerr << "error in sendto netstat" << endl;
+		}
+		cout << netstat_res << endl;
+		strcpy(last_netstat, netstat_res);
+	}
+
+}
+
+
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet) {
+	if((difftime(time(NULL), last_time) < 5) || (difftime(time(NULL), last_time) > 10)){
+		send_netstat();
+		last_time = time(NULL);
+	}
 	static int sample_count = 0;
 	if(sampling(sample_count++) == 0){
 	}else{
@@ -633,7 +680,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 
 		/* Src、DstのIPアドレスとポート番号 */
 		if(ntohs(tcp->th_sport) != -1){
-		//if(true){
+			//if(true){
 
 			/* ask database, get communication count */
 			/* IP */
@@ -681,98 +728,8 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 			strcpy(ip_src_copy, inet_ntoa(ip->ip_src));
 			strcpy(ip_dst_copy, inet_ntoa(ip->ip_dst));
 
-			if(strcmp(ip_src_copy, my_ip_copy) == 0){
-				if(checkpre(ip_dst_copy, protocol_name, tcp_flag, ntohs(tcp->th_sport), e_time, 0)){
-					/* mysql */
-					/* port number */
-					/*
-					if(d_state2 == 1 && strcmp(ip_dst_copy, DBHOST) != 0){
-						sprintf(get_query2, "select cnt from `%s` where port = %d", ip_src_copy, ntohs(tcp->th_sport));
-						if(mysql_query(conn2, get_query2)){
-							fprintf(stderr, "%s\n", mysql_error(conn2));
-							exit(1);
-						}
-						res = mysql_use_result(conn2);
-						if((row = mysql_fetch_row(res)) == NULL){
-							sprintf(post_query2, "insert into `%s`(port, cnt) values(%d, 1)", ip_src_copy, ntohs(tcp->th_sport));
-						}else{
-							sprintf(post_query2, "update `%s` set cnt = cnt + 1 where port = %d", ip_src_copy, ntohs(tcp->th_sport));
-						}
-						mysql_free_result(res);
-						if(mysql_query(conn2, post_query2)){
-							fprintf(stderr, "%s\n", mysql_error(conn2));
-							exit(1);
-						}
-					}
-					*/
-
-					/* ip address */
-					if(d_state == 1 && strcmp(ip_dst_copy, DBHOST) != 0){
-						sprintf(get_query, "select cnt from `%s` where ip = '%s'", ip_src_copy,  ip_dst_copy);
-						if(mysql_query(conn, get_query)){
-							fprintf(stderr, "%s\n", mysql_error(conn));
-							exit(1);
-						}
-						res = mysql_use_result(conn);
-						if((row = mysql_fetch_row(res)) == NULL){
-							sprintf(post_query, "insert into `%s`(ip, cnt) values('%s', 1)",ip_src_copy, ip_dst_copy);
-							ip_cnt = 1;
-
-						}else{
-							sprintf(post_query, "update `%s` set cnt = cnt + 1 where ip = '%s'", ip_src_copy, ip_dst_copy);
-							ip_cnt = atoi(row[0]) + 1;
-						}
-						mysql_free_result(res);
-						if(mysql_query(conn, post_query)){
-							fprintf(stderr, "%s\n", mysql_error(conn));
-							exit(1);
-						}
-						//mysql_free_result(res);
-						sprintf(port_get_query, "describe `%s` `%d`", my_ip_copy, ntohs(tcp->th_sport));
-						if(mysql_query(conn, port_get_query)){
-							fprintf(stderr, "%s\n", mysql_error(conn));
-							exit(1);
-						}
-						res = mysql_use_result(conn);
-						if((row = mysql_fetch_row(res)) == NULL){
-
-							mysql_free_result(res);
-							/*
-							sprintf(port_post_query, "alter table `%s` add column `%d` int(20) not null", my_ip_copy, ntohs(tcp->th_sport));
-							if(mysql_query(conn, port_post_query)){
-								fprintf(stderr, "%s\n", mysql_error(conn));
-								exit(1);
-							}
-							sprintf(port_post_query2, "update `%s` set `%d` = 0", my_ip_copy, ntohs(tcp->th_sport));
-							if(mysql_query(conn, port_post_query2)){
-								fprintf(stderr, "%s\n", mysql_error(conn));
-								exit(1);
-							}
-						}else mysql_free_result(res);
-						sprintf(port_post_query3, "update `%s` set `%d` = `%d` + 1 where ip = '%s'", my_ip_copy, ntohs(tcp->th_sport), ntohs(tcp->th_sport), ip_dst_copy);
-						//mysql_free_result(res);
-						if(mysql_query(conn, port_post_query3)){
-							fprintf(stderr, "%s\n", mysql_error(conn));
-							exit(1);
-						}
-						//mysql_free_result(res);
-						*/
-					}
-
-
-					cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
-
-					cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << ntohs(tcp->th_sport) << endl;
-					cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << ntohs(tcp->th_dport) << "(" << ip_cnt << ")" << endl;
-					cout << "    ・Time:" << e_time << "milisec" << endl;
-					cout << "      flag:" << tcp_flag << endl;
-					sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%d,true,%s,%d", count, protocol_name, c_length, ip_src_copy, ip_dst_copy, ntohs(tcp->th_sport), ntohs(tcp->th_dport), e_time, tcp_flag, ip_cnt);
-					cap_csv << pcap_data << endl;
-					if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
-						cerr << "error in sendto" << endl;
-					}
-					count++;
-				}
+			if(strcmp(ip_src_copy, ip_dst_copy) == 0){
+				//サーバ内での通信に対する処理
 			}else if(strcmp(ip_dst_copy, my_ip_copy) == 0){
 				if(checkpre(ip_src_copy, protocol_name, tcp_flag, ntohs(tcp->th_dport), e_time, 1)){
 					/* port number */
@@ -817,7 +774,97 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 							exit(1);
 						}
 						/*
-						sprintf(port_get_query, "describe `%s` `%d`", my_ip_copy, ntohs(tcp->th_dport));
+						   sprintf(port_get_query, "describe `%s` `%d`", my_ip_copy, ntohs(tcp->th_dport));
+						   if(mysql_query(conn, port_get_query)){
+						   fprintf(stderr, "%s\n", mysql_error(conn));
+						   exit(1);
+						   }
+						   res = mysql_use_result(conn);
+						   if((row = mysql_fetch_row(res)) == NULL){
+
+						   mysql_free_result(res);
+						   sprintf(port_post_query, "alter table `%s` add column `%d` int(20) not null", my_ip_copy, ntohs(tcp->th_dport));
+						   if(mysql_query(conn, port_post_query)){
+						   fprintf(stderr, "%s\n", mysql_error(conn));
+						   exit(1);
+						   }
+						   sprintf(port_post_query2, "update `%s` set `%d` = 0", my_ip_copy, ntohs(tcp->th_dport));
+						   if(mysql_query(conn, port_post_query2)){
+						   fprintf(stderr, "%s\n", mysql_error(conn));
+						   exit(1);
+						   }
+						   }else mysql_free_result(res);
+						   sprintf(port_post_query3, "update `%s` set `%d` = `%d` + 1 where ip = '%s'", my_ip_copy, ntohs(tcp->th_dport), ntohs(tcp->th_dport), ip_src_copy);
+
+						   if(mysql_query(conn, port_post_query3)){
+						   fprintf(stderr, "%s\n", mysql_error(conn));
+						   exit(1);
+						   }
+						//mysql_free_result(res);
+						*/
+					}
+				}
+
+				cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
+
+				cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << ntohs(tcp->th_sport) << "(" << ip_cnt << ")" << endl;
+				cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << ntohs(tcp->th_dport) << endl;
+				cout << "    ・Time:" << e_time << "milisec" << endl;
+				cout << "      flag:" << tcp_flag << endl;
+				sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%d,false,%s,%d", count, protocol_name, c_length, ip_dst_copy, ip_src_copy, ntohs(tcp->th_dport), ntohs(tcp->th_sport), e_time, tcp_flag, ip_cnt);
+				cap_csv << pcap_data << endl;
+				if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
+					cerr << "error in sendto" << endl;
+				}
+				count++;
+			}else if(strcmp(ip_src_copy, my_ip_copy) == 0){
+				if(checkpre(ip_dst_copy, protocol_name, tcp_flag, ntohs(tcp->th_sport), e_time, 0)){
+					/* mysql */
+					/* port number */
+					/*
+					   if(d_state2 == 1 && strcmp(ip_dst_copy, DBHOST) != 0){
+					   sprintf(get_query2, "select cnt from `%s` where port = %d", ip_src_copy, ntohs(tcp->th_sport));
+					   if(mysql_query(conn2, get_query2)){
+					   fprintf(stderr, "%s\n", mysql_error(conn2));
+					   exit(1);
+					   }
+					   res = mysql_use_result(conn2);
+					   if((row = mysql_fetch_row(res)) == NULL){
+					   sprintf(post_query2, "insert into `%s`(port, cnt) values(%d, 1)", ip_src_copy, ntohs(tcp->th_sport));
+					   }else{
+					   sprintf(post_query2, "update `%s` set cnt = cnt + 1 where port = %d", ip_src_copy, ntohs(tcp->th_sport));
+					   }
+					   mysql_free_result(res);
+					   if(mysql_query(conn2, post_query2)){
+					   fprintf(stderr, "%s\n", mysql_error(conn2));
+					   exit(1);
+					   }
+					   }
+					   */
+
+					/* ip address */
+					if(d_state == 1 && strcmp(ip_dst_copy, DBHOST) != 0){
+						sprintf(get_query, "select cnt from `%s` where ip = '%s'", ip_src_copy,  ip_dst_copy);
+						if(mysql_query(conn, get_query)){
+							fprintf(stderr, "%s\n", mysql_error(conn));
+							exit(1);
+						}
+						res = mysql_use_result(conn);
+						if((row = mysql_fetch_row(res)) == NULL){
+							sprintf(post_query, "insert into `%s`(ip, cnt) values('%s', 1)",ip_src_copy, ip_dst_copy);
+							ip_cnt = 1;
+
+						}else{
+							sprintf(post_query, "update `%s` set cnt = cnt + 1 where ip = '%s'", ip_src_copy, ip_dst_copy);
+							ip_cnt = atoi(row[0]) + 1;
+						}
+						mysql_free_result(res);
+						if(mysql_query(conn, post_query)){
+							fprintf(stderr, "%s\n", mysql_error(conn));
+							exit(1);
+						}
+						//mysql_free_result(res);
+						sprintf(port_get_query, "describe `%s` `%d`", my_ip_copy, ntohs(tcp->th_sport));
 						if(mysql_query(conn, port_get_query)){
 							fprintf(stderr, "%s\n", mysql_error(conn));
 							exit(1);
@@ -826,63 +873,65 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 						if((row = mysql_fetch_row(res)) == NULL){
 
 							mysql_free_result(res);
-							sprintf(port_post_query, "alter table `%s` add column `%d` int(20) not null", my_ip_copy, ntohs(tcp->th_dport));
-							if(mysql_query(conn, port_post_query)){
-								fprintf(stderr, "%s\n", mysql_error(conn));
-								exit(1);
-							}
-							sprintf(port_post_query2, "update `%s` set `%d` = 0", my_ip_copy, ntohs(tcp->th_dport));
-							if(mysql_query(conn, port_post_query2)){
-								fprintf(stderr, "%s\n", mysql_error(conn));
-								exit(1);
-							}
-						}else mysql_free_result(res);
-						sprintf(port_post_query3, "update `%s` set `%d` = `%d` + 1 where ip = '%s'", my_ip_copy, ntohs(tcp->th_dport), ntohs(tcp->th_dport), ip_src_copy);
-						
+							/*
+							   sprintf(port_post_query, "alter table `%s` add column `%d` int(20) not null", my_ip_copy, ntohs(tcp->th_sport));
+							   if(mysql_query(conn, port_post_query)){
+							   fprintf(stderr, "%s\n", mysql_error(conn));
+							   exit(1);
+							   }
+							   sprintf(port_post_query2, "update `%s` set `%d` = 0", my_ip_copy, ntohs(tcp->th_sport));
+							   if(mysql_query(conn, port_post_query2)){
+							   fprintf(stderr, "%s\n", mysql_error(conn));
+							   exit(1);
+							   }
+							   }else mysql_free_result(res);
+							   sprintf(port_post_query3, "update `%s` set `%d` = `%d` + 1 where ip = '%s'", my_ip_copy, ntohs(tcp->th_sport), ntohs(tcp->th_sport), ip_dst_copy);
+						//mysql_free_result(res);
 						if(mysql_query(conn, port_post_query3)){
-							fprintf(stderr, "%s\n", mysql_error(conn));
-							exit(1);
+						fprintf(stderr, "%s\n", mysql_error(conn));
+						exit(1);
 						}
 						//mysql_free_result(res);
 						*/
 					}
-				}
+
 
 					cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
-					cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << ntohs(tcp->th_sport) << "(" << ip_cnt << ")" << endl;
-					cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << ntohs(tcp->th_dport) << endl;
+					cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << ntohs(tcp->th_sport) << endl;
+					cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << ntohs(tcp->th_dport) << "(" << ip_cnt << ")" << endl;
 					cout << "    ・Time:" << e_time << "milisec" << endl;
 					cout << "      flag:" << tcp_flag << endl;
-					sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%d,false,%s,%d", count, protocol_name, c_length, ip_dst_copy, ip_src_copy, ntohs(tcp->th_dport), ntohs(tcp->th_sport), e_time, tcp_flag, ip_cnt);
+					sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%d,true,%s,%d", count, protocol_name, c_length, ip_src_copy, ip_dst_copy, ntohs(tcp->th_sport), ntohs(tcp->th_dport), e_time, tcp_flag, ip_cnt);
 					cap_csv << pcap_data << endl;
 					if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 						cerr << "error in sendto" << endl;
 					}
 					count++;
+				}
 			}else{
 				cerr << "Cannot find ip:" << my_ip_copy << endl;
 				cerr << "src(" << ip_src_copy << ":" << ntohs(tcp->th_sport) << "), dst(" << ip_dst_copy << ":" << ntohs(tcp->th_dport) << ")" << endl;
 			}
 		}
-			if(ip_cnt > max_ip_count){
-				max_ip_count = ip_cnt;
-				//cout << "IPカウントの最大値を更新" << endl;
-				char send_max[50];
-				sprintf(send_max, "max,%d", max_ip_count);
-				if(sendto(sock, send_max, strlen(send_max), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
-					cerr << "error in sendto" << endl;
-				}
+		if(ip_cnt > max_ip_count){
+			max_ip_count = ip_cnt;
+			//cout << "IPカウントの最大値を更新" << endl;
+			char send_max[50];
+			sprintf(send_max, "max,%d", max_ip_count);
+			if(sendto(sock, send_max, strlen(send_max), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
+				cerr << "error in sendto" << endl;
 			}
+		}
 
-			/* 見栄えを良くするためここでヘッダ長のエラーを報告 */
-			if (size_ip < 20) {
-				cerr << "    --不正なIPヘッダ長:" << size_ip << "bytes--" << endl;
-			}
-			if (ip->ip_p == IPPROTO_TCP && size_tcp < 20) {
-				cerr << "    --不正なTCPヘッダ長:" << size_tcp << "bytes--" << endl;
-			}
-			//if(payload != NULL) cout << payload << endl;
+		/* 見栄えを良くするためここでヘッダ長のエラーを報告 */
+		if (size_ip < 20) {
+			cerr << "    --不正なIPヘッダ長:" << size_ip << "bytes--" << endl;
+		}
+		if (ip->ip_p == IPPROTO_TCP && size_tcp < 20) {
+			cerr << "    --不正なTCPヘッダ長:" << size_tcp << "bytes--" << endl;
+		}
+		//if(payload != NULL) cout << payload << endl;
 		}
 	}
 
