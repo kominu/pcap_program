@@ -26,6 +26,23 @@ git config --global でユーザ名とemail登録
 git remote set-url git@github.com:kominu/pcap\_program 
 のあと、ssh-keygen -t rsaで公開鍵を作成、githubに登録
 
+_ログの設定_
+iptablesの設定の最後に 
+-N LOGGING 
+-A LOGGING -j LOG --log-prefix "DROP: " --log-level=info 
+-A LOGGING -j DROP 
+-A INPUT -j LOGGING 
+を加える 
+
+rsyslog.confに 
+kern.info	/var/log/iptables.log 
+を追加 
+
+/etc/logrotate.d/iptables 
+に設定を記述 
+
+その後service restart
+
 ## オプション
 * -s
 サンプリングモード。後ろに数値をつければ1/xでサンプリングする
