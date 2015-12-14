@@ -17,6 +17,14 @@ iptablesの設定に
 -A INPUT -p udp --dport 19998 -j ACCEPT 
 を追加
 
+gitを使う際は 
+git checkout -b develop 
+で作業用ブランチを作成 
+
+githubにpushするには 
+git config --global でユーザ名とemail登録 
+git remote set-url git@github.com:kominu/pcap\_program 
+のあと、ssh-keygen -t rsaで公開鍵を作成、githubに登録
 
 ## オプション
 * -s
