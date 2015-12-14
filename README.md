@@ -6,6 +6,18 @@ packet capture program(C++)
 可視化プログラムから送られてくるUDPパケットを元に送信先のポート、IPを決める
 そのため可視化プログラムが起動するまでキャプチャは開始されない
 
+## 準備
+* libpcap-devel
+* mysql
+* mysql-server
+* mysql-devel 
+をインストール
+
+iptablesの設定に 
+-A INPUT -p udp --dport 19998 -j ACCEPT 
+を追加
+
+
 ## オプション
 * -s
 サンプリングモード。後ろに数値をつければ1/xでサンプリングする

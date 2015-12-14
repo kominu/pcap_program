@@ -18,9 +18,9 @@
 #include <mysql/mysql.h>
 #include <arpa/inet.h>
 
-#define DBHOST "kominu.com"
+#define DBHOST "localhost"
 #define DBUSER "pcap"
-#define DBPASS ""
+#define DBPASS "pcap"
 #define DBNAME "pcap_db"
 #define DBNAME2 "pcap_port_db"
 
@@ -69,7 +69,7 @@ int main(int argc, char *argv[]){
 	char err_name[20] = "err_data.csv";
 	char pcap_name[20] = "log.pcap";
 	char *dev, errbuf[PCAP_ERRBUF_SIZE], hostname[256];
-	int port = 20000;
+	int port = 19998;
 	int send_port = 30000;
 	//char *sock_ip = "54.64.112.212";
 	//char *sock_ip = "172.31.19.205";//aws server1
@@ -83,7 +83,8 @@ int main(int argc, char *argv[]){
 	//struct in_addr ip_addr;
 	struct hostent *host;
 	char message[256];
-	char filter_exp[] = "(not udp src port 20000) && (not (host kominu.com && port 3306))";
+	//char filter_exp[] = "(not udp src port 19998) && (not (host kominu.com && port 3306))";
+	char filter_exp[] = "(not udp src port 19998)";
 	char filter_exp2[128];
 	//char filter_exp[] = "";
 	struct bpf_program fp;
@@ -101,7 +102,7 @@ int main(int argc, char *argv[]){
 	switch(argc){
 		case 1:
 			mode_state = 1;
-			s_state = 1;
+			s_state = 0;
 			s_rate = 10;
 			break;
 		case 2:
@@ -246,17 +247,22 @@ int main(int argc, char *argv[]){
 			strcpy(my_ip_copy, argv[2]);
 		}else strcpy(my_ip_copy, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
 		cout << "IP:" << my_ip_copy << endl;
-		if(strcmp("172.31.19.205", my_ip_copy) == 0) sprintf(filter_exp2, "(not udp src port 20000) and host %s", my_ip_copy);
+		if(strcmp("172.31.19.205", my_ip_copy) == 0) sprintf(filter_exp2, "(not udp src port 19998) and host %s", my_ip_copy);
 		else sprintf(filter_exp2, "%s and host %s", filter_exp, my_ip_copy);
 	}
 
 	/* socket設定の続き ipアドレスが必要なため */
 	sock_ip = dst_ip = inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr);
 	//strcpy(dst_ip, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+	
 	inet_aton(sock_ip, &me.sin_addr);
 	inet_aton(dst_ip, &distination.sin_addr);
-	bind(sock, (struct sockaddr *)&me, sizeof(me));
-
+	cout << inet_ntoa(me.sin_addr) << ":" << ntohs(me.sin_port) << endl;
+	if(bind(sock, (struct sockaddr *)&me, sizeof(me)) < 0){
+		cout << "bind error" << endl;
+		close(sock);
+		return -1;
+	}
 	/* ディバイスをオープン(非プロミスキャスモード) */
 	if(mode_state == 1) handle = pcap_open_live(dev, 64, 0, 100, errbuf);
 	else handle = pcap_open_offline(argv[1], errbuf);
@@ -303,6 +309,7 @@ int main(int argc, char *argv[]){
 		d_state2 = 0;
 	}
 
+	cout << "waiting for packets from client" << endl;
 	addrlen = sizeof(distination);
 	if(recvfrom(sock, message, strlen(message), 0, (struct sockaddr *)&distination, &addrlen) > 0){
 		cout << message << endl;
@@ -680,7 +687,6 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 
 		/* Src、DstのIPアドレスとポート番号 */
 		if(ntohs(tcp->th_sport) != -1){
-			//if(true){
 
 			/* ask database, get communication count */
 			/* IP */
@@ -729,7 +735,10 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 			strcpy(ip_dst_copy, inet_ntoa(ip->ip_dst));
 
 			if(strcmp(ip_src_copy, ip_dst_copy) == 0){
+				cout << "サーバ内での通信" << endl;
 				//サーバ内での通信に対する処理
+			}else if((strcmp(ip_dst_copy, my_ip_copy) != 0) && (strcmp(ip_src_copy, my_ip_copy) != 0)){
+				cout << "関係ない通信" << endl;
 			}else if(strcmp(ip_dst_copy, my_ip_copy) == 0){
 				if(checkpre(ip_src_copy, protocol_name, tcp_flag, ntohs(tcp->th_dport), e_time, 1)){
 					/* port number */
