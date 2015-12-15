@@ -511,24 +511,25 @@ void send_netstat(){
 	char netstat_res[128];
 	char netstat_buf[512];
 	int split_count;
+	char *saveptr, *saveptr2;
 	strcpy(netstat_res, "netstat");
 
 	FILE *nfp = popen("sudo netstat -tanp | grep LISTEN", "r");
 	while(fgets(netstat_buf, sizeof(netstat_buf), nfp)){
-		tok = strtok(netstat_buf, " ");
+		tok = strtok_r(netstat_buf, " ", &saveptr);
 		for(split_count = 0;tok != NULL;split_count++){
 			if(split_count == 3){
 				break;
 			}
-			tok = strtok(NULL, " ");
+			tok = strtok_r(NULL, " ", &saveptr);
 		}
-		tok2 = strtok(tok, ":");
+		tok2 = strtok_r(tok, ":", &saveptr2);
 		while(tok2 != NULL){
 			if(strlen(tok2) < 7){
 				strcat(netstat_res, ",");
 				strcat(netstat_res, tok2);
 			}
-			tok2 = strtok(NULL, ":");
+			tok2 = strtok_r(NULL, ":", &saveptr2);
 		}
 	}
 	if(strcmp(netstat_res, last_netstat) != 0){
