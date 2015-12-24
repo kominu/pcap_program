@@ -33,6 +33,9 @@ ofstream cap_csv;//cap_csvファイルに書き込むようのオブジェクト
 ofstream err_csv;//err_cav用
 FILE *fp2;//popen用の一時的なポインタ
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
+void logRead(char *last, FILE *flog);
+void logSend(const char *buf);
+
 long s_time;
 bpf_u_int32 my_addr;
 bpf_u_int32 my_nmask;
@@ -50,6 +53,8 @@ long old_e_time;
 char ip_best[128];
 time_t start_time, last_time;
 char last_netstat[128];
+const char *check_list[] = {"DROP", "SRC", "DST", "PROTO", "SPT", "DPT", "SYN", "ACK", "RST", "FIN"};
+int sample_count;
 
 /*
  * 直前のip, port, protocol, flag, 経過時間と比較し、
@@ -90,6 +95,10 @@ int main(int argc, char *argv[]){
 	struct ifreq ifr;
 	char create_query[50];
 	char create_port_query[50];
+	int pid;
+
+	sample_count = 0;
+
 	max_ip_count = 0;
 	old_e_time = 0;
 	start_time = time(NULL);
@@ -100,7 +109,7 @@ int main(int argc, char *argv[]){
 	switch(argc){
 		case 1:
 			mode_state = 1;
-			s_state = 0;
+			s_state = 1;
 			s_rate = 10;
 			break;
 		case 2:
@@ -154,6 +163,7 @@ int main(int argc, char *argv[]){
 		default:
 			mode_state = 1;
 			s_state = 0;
+			s_rate = 1;
 			//cout << "引数が多すぎます" << endl;
 			//exit(1);
 	}
@@ -301,10 +311,38 @@ int main(int argc, char *argv[]){
 	}
 
 	send_netstat();
-	/* loop */
-	if(pcap_loop(handle, -1, got_packet, NULL)<0){
-		fprintf(stderr, "キャプチャに失敗:%s\n", errbuf);
-		exit(1);
+	/* pcaploopとlogreadをマルチプロセスで動かす */
+
+	pid = fork();
+
+	switch(pid){
+		case -1:
+			cerr << "error in fork" << endl;
+			exit(1);
+		case 0://子プロセス、logread
+			char last_log[256];
+			FILE *f_log;
+
+			if(!(f_log = popen("sudo tail -n 1 /var/log/iptables.log", "r"))){
+				cerr << "error in popen" << endl;
+				exit(1);
+			}
+			if(!fgets(last_log, 255, f_log)){
+				cerr << "error in fgets:" << pid << endl;
+				exit(1);
+			}
+			pclose(f_log);
+
+			logRead(last_log, f_log);
+			break;
+		default://親プロセス、pcaploop
+
+			/* loop */
+			if(pcap_loop(handle, -1, got_packet, NULL)<0){
+				fprintf(stderr, "キャプチャに失敗:%s\n", errbuf);
+				exit(1);
+			}
+			break;
 	}
 
 	if(d_state == 1) mysql_close(conn);
@@ -498,12 +536,13 @@ int checkpre(char *cl_ip, char *proto, char *flag, int sv_port, int ptime, int s
 int sampling(int count){
 	if(s_state == 1){
 		int sample_key = count % s_rate;
-		if(sample_key  == 0) return 1;
+		if(sample_key  == 0) return(1);
 		else{
 			//cout << sample_key << endl;
-			return 0;
+			cout << "sampled packets" << endl;
+			return(0);
 		}
-	}else return 1;
+	}else return(1);
 }
 
 void send_netstat(){
@@ -548,8 +587,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		send_netstat();
 		last_time = time(NULL);
 	}
-	static int sample_count;
-	if(sampling(sample_count++) != 0){
+	if( sampling(sample_count++) != 0){
 		/* logファイルに書き込む */
 		//pcap_dump((unsigned char *)dumpfile, header, packet);
 
@@ -666,6 +704,8 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		is_src = strcmp(ip_src_copy, my_ip_copy);
 		is_dst = strcmp(ip_dst_copy, my_ip_copy);
 
+		cout << "ID:" << ip->ip_id << endl;
+
 		if((is_src == 0) && (is_dst == 0)){
 			cout << "サーバ内での通信" << endl;
 			//サーバ内での通信に対する処理
@@ -775,5 +815,67 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 	}
 }
 
+void logRead(char *last, FILE *flog){
+	char new_log[256];
 
+	while(1){
+		if(!(flog = popen("sudo tail -n 1 /var/log/iptables.log", "r"))){
+			cerr << "error in popen" << endl;
+			exit(1);
+		}
+		if(!fgets(new_log, 255, flog)){
+			cerr << "error in fgets" << endl;
+			exit(1);
+		}
+		if(strcmp(new_log, last) != 0){
+			logSend(new_log);
+			strcpy(last, new_log);
+		}
+		pclose(flog);
+	}
+}
 
+void logSend(const char *buf){
+	char *separator = " ";
+	char *split_str;
+	int count2 = 0;
+	char sport[6] = "";
+	char dport[6] = "";
+	char str[256];
+	char str2[256] = "";
+	char *saveptr;
+	char log_query[256];
+
+	strcpy(str, buf);
+	if(strstr(str, "DROP:")){
+		split_str = strtok_r(str, separator, &saveptr);
+		while(split_str != NULL){
+			int j;
+			for(j = 0;j < 10;j++){
+				if(strstr(split_str, check_list[j])){
+					if(strcmp(str2, "") != 0) strcat(str2, " ");
+					strcat(str2, split_str);
+				}
+			}
+			if(strncmp(split_str, "SPT=", 4) == 0){
+				int i = 0;
+				while(split_str[i]!='\0'){
+					if(isdigit(split_str[i])!=0) sport[strlen(sport)] = split_str[i];
+					i++;
+				}
+			}else if(strncmp(split_str, "DPT=", 4) == 0){
+				int i = 0;
+				while(split_str[i]!='\0'){
+					if(isdigit(split_str[i])!=0) dport[strlen(dport)] = split_str[i];
+					i++;
+				}
+			}
+			split_str = strtok_r(NULL, separator, &saveptr);
+		}
+		sprintf(log_query, "log,%s,%s,%s", sport, dport, str2);
+		cout << log_query << endl;
+		if(sendto(sock, log_query, strlen(log_query), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
+			cerr << "error in sending logs" << endl;
+		}
+	}else cout << "not iptables log found" << endl;	
+}
