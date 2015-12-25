@@ -704,7 +704,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		is_src = strcmp(ip_src_copy, my_ip_copy);
 		is_dst = strcmp(ip_dst_copy, my_ip_copy);
 
-		cout << "ID:" << ip->ip_id << endl;
+		//cout << "ID:" << ip->ip_id << endl;
 
 		if((is_src == 0) && (is_dst == 0)){
 			cout << "サーバ内での通信" << endl;
@@ -741,13 +741,13 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 					}
 				}
 
-				cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
+				cout << count << "-取得したパケット:" << "ID(" << ip->ip_id << ")" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
 				cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << ntohs(tcp->th_sport) << "(" << ip_cnt << ")" << endl;
 				cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << ntohs(tcp->th_dport) << endl;
 				cout << "    ・Time:" << e_time << "milisec" << endl;
 				cout << "      flag:" << tcp_flag << endl;
-				sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%d,false,%s,%d", count, protocol_name, c_length, ip_dst_copy, ip_src_copy, ntohs(tcp->th_dport), ntohs(tcp->th_sport), e_time, tcp_flag, ip_cnt);
+				sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%d,false,%s,%d", count, protocol_name, c_length, ip_dst_copy, ip_src_copy, ntohs(tcp->th_dport), ntohs(tcp->th_sport), e_time, tcp_flag, ip->ip_id);
 				//cap_csv << pcap_data << endl;
 				if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 					cerr << "error in sendto" << endl;
@@ -785,13 +785,13 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 				}
 
 
-				cout << count << "-取得したパケット:" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
+				cout << count << "-取得したパケット:" << "ID(" << ip->ip_id << ")" <<  protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
 				cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << ntohs(tcp->th_sport) << endl;
 				cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << ntohs(tcp->th_dport) << "(" << ip_cnt << ")" << endl;
 				cout << "    ・Time:" << e_time << "milisec" << endl;
 				cout << "      flag:" << tcp_flag << endl;
-				sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%d,true,%s,%d", count, protocol_name, c_length, ip_src_copy, ip_dst_copy, ntohs(tcp->th_sport), ntohs(tcp->th_dport), e_time, tcp_flag, ip_cnt);
+				sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%d,true,%s,%d", count, protocol_name, c_length, ip_src_copy, ip_dst_copy, ntohs(tcp->th_sport), ntohs(tcp->th_dport), e_time, tcp_flag, ip->ip_id);
 				//cap_csv << pcap_data << endl;
 				if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 					cerr << "error in sendto" << endl;
