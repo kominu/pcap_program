@@ -83,7 +83,7 @@ int main(int argc, char *argv[]){
 	//char *dst_ip = "172.31.30.244";//aws proxy
 	char *sock_ip, *dst_ip;
 	pcap_t *handle;
-	struct pcap_pkthdr header;
+	//struct pcap_pkthdr header;
 	//struct in_addr ip_addr;
 	struct hostent *host;
 	char message[256];
@@ -95,7 +95,7 @@ int main(int argc, char *argv[]){
 	socklen_t addrlen;
 	struct ifreq ifr;
 	char create_query[50];
-	char create_port_query[50];
+	//char create_port_query[50];
 	int pid, pid2;
 
 	sample_count = 0;
@@ -636,7 +636,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		static int count = 1;
 		string err_msg = "";
 		int c_length = header->caplen;
-		int length = header->len;
+		//int length = header->len;
 		if(!s_time){
 			s_time = header->ts.tv_sec*1000 + header->ts.tv_usec/1000;
 		}
@@ -689,7 +689,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 				break;
 		}
 
-		cout << protocol_name << endl;
+		//cout << protocol_name << endl;
 
 		if(ip->ip_p == IPPROTO_TCP){
 			if(tcp->th_flags & TH_FIN) strcpy(tcp_flag, "FIN");
@@ -776,12 +776,12 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 					}
 				}
 
-				cout << count << "-取得したパケット:" << "ID(" << ntohs(ip->ip_id) << ")" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
+				//cout << count << "-取得したパケット:" << "ID(" << ntohs(ip->ip_id) << ")" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
-				cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << s_port << "(" << ip_cnt << ")" << endl;
-				cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << d_port << endl;
-				cout << "    ・Time:" << e_time << "milisec" << endl;
-				cout << "      flag:" << tcp_flag << endl;
+				//cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << s_port << "(" << ip_cnt << ")" << endl;
+				//cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << d_port << endl;
+				//cout << "    ・Time:" << e_time << "milisec" << endl;
+				//cout << "      flag:" << tcp_flag << endl;
 				sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%ld,false,%s,%d", count, protocol_name, c_length, ip_dst_copy, ip_src_copy, d_port, s_port, e_time, tcp_flag, ntohs(ip->ip_id));
 				//cap_csv << pcap_data << endl;
 				if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
@@ -817,12 +817,12 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 				}
 
 
-				cout << count << "-取得したパケット:" << "ID(" << ntohs(ip->ip_id) << ")" <<  protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
+				//cout << count << "-取得したパケット:" << "ID(" << ntohs(ip->ip_id) << ")" <<  protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
-				cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << s_port << endl;
-				cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << d_port << "(" << ip_cnt << ")" << endl;
-				cout << "    ・Time:" << e_time << "milisec" << endl;
-				cout << "      flag:" << tcp_flag << endl;
+				//cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << s_port << endl;
+				//cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << d_port << "(" << ip_cnt << ")" << endl;
+				//cout << "    ・Time:" << e_time << "milisec" << endl;
+				//cout << "      flag:" << tcp_flag << endl;
 				sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%ld,true,%s,%d", count, protocol_name, c_length, ip_src_copy, ip_dst_copy, s_port, d_port, e_time, tcp_flag, ntohs(ip->ip_id));
 				//cap_csv << pcap_data << endl;
 				if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
