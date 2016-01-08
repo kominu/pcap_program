@@ -4,3 +4,4 @@ pcap
 a.out
 analysis
 *.txt
+core.*

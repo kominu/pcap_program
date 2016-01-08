@@ -35,6 +35,7 @@ FILE *fp2;//popen用の一時的なポインタ
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
 void logRead(char *last, FILE *flog);
 void logSend(const char *buf);
+void fwRead(char *lasthash, FILE *fip);
 
 long s_time;
 bpf_u_int32 my_addr;
@@ -53,7 +54,7 @@ long old_e_time;
 char ip_best[128];
 time_t start_time, last_time;
 char last_netstat[128];
-const char *check_list[] = {"DROP", "SRC", "DST", "PROTO", "SPT", "DPT", "SYN", "ACK", "RST", "FIN"};
+const char *check_list[] = {"DROP", "SRC", "DST", "PROTO", "SPT", "DPT", "SYN", "ACK", "RST", "FIN", "ID"};
 int sample_count;
 
 /*
@@ -95,7 +96,7 @@ int main(int argc, char *argv[]){
 	struct ifreq ifr;
 	char create_query[50];
 	char create_port_query[50];
-	int pid;
+	int pid, pid2;
 
 	sample_count = 0;
 
@@ -319,21 +320,46 @@ int main(int argc, char *argv[]){
 		case -1:
 			cerr << "error in fork" << endl;
 			exit(1);
-		case 0://子プロセス、logread
-			char last_log[256];
-			FILE *f_log;
+			break;
+		case 0://子プロセス、logreadかfwread
+			pid2 = fork();
+			switch(pid2){
+				case -1:
+					cerr << "error in fork2" << endl;
+					exit(1);
+					break;
+				case 0://fwread
+					char last_fwhash[100];
+					FILE *fip;
 
-			if(!(f_log = popen("sudo tail -n 1 /var/log/iptables.log", "r"))){
-				cerr << "error in popen" << endl;
-				exit(1);
-			}
-			if(!fgets(last_log, 255, f_log)){
-				cerr << "error in fgets:" << pid << endl;
-				exit(1);
-			}
-			pclose(f_log);
+					if(!(fip = popen("sudo md5sum /etc/sysconfig/iptables", "r"))){
+						cerr << "error in md5sum" << endl;
+						exit(1);
+					}
+					if(!(fgets(last_fwhash, 99, fip))){
+						cerr << "error in fgets fip" << endl;
+					}
+					pclose(fip);
+					fwRead(last_fwhash, fip);
+					break;
+				default://logread
+					char last_log[256];
+					FILE *f_log;
 
-			logRead(last_log, f_log);
+					if(!(f_log = popen("sudo tail -n 1 /var/log/iptables.log", "r"))){
+						cerr << "error in popen" << endl;
+						exit(1);
+					}
+					if(!fgets(last_log, 255, f_log)){
+						cerr << "error in fgets:" << pid << endl;
+						exit(1);
+					}
+					pclose(f_log);
+
+					logRead(last_log, f_log);
+					break;
+			}
+
 			break;
 		default://親プロセス、pcaploop
 
@@ -712,7 +738,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		s_port = ntohs(tcp->th_sport);
 		d_port = ntohs(tcp->th_dport);
 
-		//cout << "ID:" << ip->ip_id << endl;
+		//cout << "ID:" << ntohs(ip->ip_id) << endl;
 
 		if((is_src == 0) && (is_dst == 0)){
 			cout << "サーバ内での通信" << endl;
@@ -750,13 +776,13 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 					}
 				}
 
-				cout << count << "-取得したパケット:" << "ID(" << ip->ip_id << ")" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
+				cout << count << "-取得したパケット:" << "ID(" << ntohs(ip->ip_id) << ")" << protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
 				cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << s_port << "(" << ip_cnt << ")" << endl;
 				cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << d_port << endl;
 				cout << "    ・Time:" << e_time << "milisec" << endl;
 				cout << "      flag:" << tcp_flag << endl;
-				sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%ld,false,%s,%d", count, protocol_name, c_length, ip_dst_copy, ip_src_copy, d_port, s_port, e_time, tcp_flag, ip->ip_id);
+				sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%ld,false,%s,%d", count, protocol_name, c_length, ip_dst_copy, ip_src_copy, d_port, s_port, e_time, tcp_flag, ntohs(ip->ip_id));
 				//cap_csv << pcap_data << endl;
 				if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 					cerr << "error in sendto" << endl;
@@ -791,13 +817,13 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 				}
 
 
-				cout << count << "-取得したパケット:" << "ID(" << ip->ip_id << ")" <<  protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
+				cout << count << "-取得したパケット:" << "ID(" << ntohs(ip->ip_id) << ")" <<  protocol_name << "(" << c_length << "/" << length << ")bytes" << err_msg << endl;
 
 				cout << "    ・From:" << inet_ntoa(ip->ip_src) << ":" << s_port << endl;
 				cout << "    ・To  :" << inet_ntoa(ip->ip_dst) << ":" << d_port << "(" << ip_cnt << ")" << endl;
 				cout << "    ・Time:" << e_time << "milisec" << endl;
 				cout << "      flag:" << tcp_flag << endl;
-				sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%ld,true,%s,%d", count, protocol_name, c_length, ip_src_copy, ip_dst_copy, s_port, d_port, e_time, tcp_flag, ip->ip_id);
+				sprintf(pcap_data, "pcap,%d,%s,%d,%s,%s,%d,%d,%ld,true,%s,%d", count, protocol_name, c_length, ip_src_copy, ip_dst_copy, s_port, d_port, e_time, tcp_flag, ntohs(ip->ip_id));
 				//cap_csv << pcap_data << endl;
 				if(sendto(sock, pcap_data, strlen(pcap_data), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 					cerr << "error in sendto" << endl;
@@ -818,7 +844,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		}
 		//if(payload != NULL) cout << payload << endl;
 	}else{
-		cout << "sampled" << endl;
+		//cout << "sampled" << endl;
 	}
 }
 
@@ -843,11 +869,11 @@ void logRead(char *last, FILE *flog){
 }
 
 void logSend(const char *buf){
-	char *separator = " ";
+	const char *separator = " ";
 	char *split_str;
-	int count2 = 0;
 	char sport[6] = "";
 	char dport[6] = "";
+	char idnum[6] = "";
 	char str[256];
 	char str2[256] = "";
 	char *saveptr;
@@ -858,7 +884,7 @@ void logSend(const char *buf){
 		split_str = strtok_r(str, separator, &saveptr);
 		while(split_str != NULL){
 			int j;
-			for(j = 0;j < 10;j++){
+			for(j = 0;j < 11;j++){
 				if(strstr(split_str, check_list[j])){
 					if(strcmp(str2, "") != 0) strcat(str2, " ");
 					strcat(str2, split_str);
@@ -876,13 +902,218 @@ void logSend(const char *buf){
 					if(isdigit(split_str[i])!=0) dport[strlen(dport)] = split_str[i];
 					i++;
 				}
+			}else if(strncmp(split_str, "ID=", 3) == 0){
+				int i = 0;
+				while(split_str[i]!='\0'){
+					if(isdigit(split_str[i])!=0) idnum[strlen(idnum)] = split_str[i];
+					i++;
+				}
 			}
 			split_str = strtok_r(NULL, separator, &saveptr);
 		}
-		sprintf(log_query, "log,%s,%s,%s", sport, dport, str2);
+		sprintf(log_query, "log,%s,%s,%s,%s", idnum, sport, dport, str2);
 		cout << log_query << endl;
 		if(sendto(sock, log_query, strlen(log_query), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 			cerr << "error in sending logs" << endl;
 		}
 	}else cout << "not iptables log found" << endl;	
+}
+
+
+void fwRead(char *lasthash, FILE *fip){
+
+	char str[256];//fgets用
+	bool fw_input, fw_output, fw_original, fw_original2;//読み込んでいる間true
+	bool in_accept, out_accept;//デフォルトポリシー
+	char *saveptr, *saveptr2;//strtok_r
+	char *split_str, *split_str2;//strtok_r
+	const char *separator = " ";//strtok_r
+	char input_send[4096];//INPUTチェーンの内容
+	char output_send[4096];//OUTPUTチェーンの内容
+	char original_send[512];//ユーザ定義チェーン一つ目
+	char original2_send[512];//ユーザ定義チェーン二つ目
+	char original_name[20], original2_name[20];//ユーザ定義チェーン名前
+	char *find;//改行を消す際使用
+	char newhash[100];
+	bool send_flag = true;
+
+	while(1){
+		if(!(fip = popen("sudo md5sum /etc/sysconfig/iptables", "r"))){
+			cerr << "error in popen" << endl;
+			exit(1);
+		}
+		if(!fgets(newhash, 99, fip)){
+			cerr << "error in fwread:fgets" << endl;
+			exit(1);
+		}
+		pclose(fip);
+		if(strcmp(newhash, lasthash) != 0){
+			send_flag = true;
+		}
+		if(send_flag){
+
+			if(!(fip = popen("sudo iptables -nvL", "r"))){
+				cerr << "error in popen" << endl;
+				exit(1);
+			}
+
+			fw_input = fw_output = false;
+			fw_original = fw_original2 = false;
+			/*
+			strcpy(original_name, "");
+			strcpy(original2_name, "");
+			strcpy(original_send, "");
+			strcpy(original2_send, "");
+			strcpy(input_send, "input,\n");
+			strcpy(output_send, "output,\n");
+			*/
+			memset(original_name, '\0', strlen(original_name));
+			memset(original2_name, '\0', strlen(original2_name));
+			memset(original_send, '\0', strlen(original_send));
+			memset(original2_send, '\0', strlen(original2_send));
+			memset(input_send, '\0', strlen(input_send));
+			memset(output_send, '\0', strlen(output_send));
+
+			saveptr = saveptr2 = NULL;
+
+			while(fgets(str, 255, fip) != NULL){
+
+				//ユーザチェーン読み込み
+				if(fw_original){
+					if(str[0] == '\n'){
+						//original_send[strlen(original_send)] = "\0";
+						fw_original = false;
+					}else if(!strstr(str, "target") && !strstr(str, " LOG ")){
+						if((find = strchr(str, '\n')) != NULL){
+							//*find = '\0';
+						}
+						strcat(original_send, str);
+						//strcat(original_send, ";");
+					}
+				}else if(fw_original2){
+					if(str[0] == '\n'){
+						//original2_send[strlen(original2_send)] = "\0";
+						fw_original2 = false;
+					}else if(!strstr(str, "target") && !strstr(str, " LOG ")){
+						if((find = strchr(str, '\n')) != NULL){
+							//*find = '\0';
+						}
+						strcat(original2_send, str);
+						//strcat(original2_send, ";");
+					}
+				}
+
+				//チェーン開始
+				if(strstr(str, "Chain INPUT")){
+					if(strstr(str, "policy ACCEPT")) in_accept = true;
+					else in_accept = false;
+				}else if(strstr(str, "Chain FORWARD")){
+					//監視対象IPを含まない場合の処理
+				}else if(strstr(str, "Chain OUTPUT")){
+					if(strstr(str, "policy ACCEPT")) out_accept = true;
+					else in_accept = false;
+				}else if(strstr(str, "Chain ")){
+					if(!fw_original){
+						split_str = strtok_r(str, separator, &saveptr);	
+						split_str = strtok_r(NULL, separator, &saveptr);
+						strcpy(original_name, split_str);
+						fw_original = true;
+					}else if(!fw_original2){
+						split_str2 = strtok_r(str, separator, &saveptr2);	
+						split_str2 = strtok_r(NULL, separator, &saveptr2);
+						strcpy(original2_name, split_str2);
+						fw_original2 = true;
+					}else cerr << "too many user chains" << endl;
+					//ユーザチェーンは２つまで対応
+				}
+
+			}
+
+			//デフォルトポリシーを文字列に結合
+			if(in_accept){
+				strcat(input_send, "true\n");
+			}else{
+				strcat(input_send, "false\n");
+			}
+			if(out_accept){
+				strcat(output_send, "true\n");
+			}else{
+				strcat(output_send, "false\n");
+			}
+
+
+			//ファイルポインタを先頭に→ rewindはファイルのみ
+			//rewind(fip);
+			pclose(fip);
+			if(!(fip = popen("sudo iptables -nvL", "r"))){
+				cerr << "error in popen" << endl;
+				exit(1);
+			}
+			//ユーザチェーンを把握した状態でもう一度読み込む
+			while(fgets(str, 255, fip) != NULL){
+				//ルール読み込み
+				if(fw_input){
+					if(str[0] == '\n'){
+						//input_send[strlen(input_send)] = "\0";
+						fw_input = false;
+					}else if(!strstr(str, "target") && !strstr(str, " LOG ")){
+						if((original_name[0] != '\0') && strstr(str, original_name)){
+							strcat(input_send, original_send);
+							//strcat(input_send, ";");
+						}else if((original2_name[0] != '\0') && strstr(str, original2_name)){
+							strcat(input_send, original2_send);
+							//strcat(input_send, ";");
+						}else{
+							if((find = strchr(str, '\n')) != NULL){
+								//*find = '\0';
+							}
+							strcat(input_send, str);
+							//strcat(input_send, ";");
+						}
+					}
+				}else if(fw_output){
+					if(str[0] == '\n'){
+						//output_send[strlen(output_send)] = "\0";
+						fw_output = false;
+					}else if(!strstr(str, "target") && !strstr(str, " LOG ")){
+						if((original_name[0] != '\0') && strstr(str, original_name)){
+							strcat(output_send, original_send);
+							//strcat(output_send, ";");
+						}else if((original2_name[0] != '\0') && strstr(str, original2_name)){
+							strcat(output_send, original2_send);
+							//strcat(output_send, ";");
+						}else{
+							if((find = strchr(str, '\n')) != NULL){
+								//*find = '\0';
+							}
+							strcat(output_send, str);
+							//strcat(output_send, ";");
+						}
+					}
+				}
+
+				//チェーン開始
+				if(strstr(str, "Chain INPUT")){
+					if(!fw_input) fw_input = true;
+				}else if(strstr(str, "Chain OUTPUT")){
+					if(!fw_output) fw_output = true;
+				}
+			}
+
+			//cout << "original" << endl << original_send << endl << endl;
+			if(sendto(sock, input_send, strlen(input_send), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
+				cerr << "error in sendto input_send" << endl;
+			}
+			if(sendto(sock, output_send, strlen(output_send), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
+				cerr << "error in sendto output_send" << endl;
+			}
+			cout << input_send << endl << endl;
+			cout << output_send << endl << endl;
+
+			pclose(fip);
+			strcpy(lasthash, newhash);
+			send_flag = false;
+		}
+		sleep(3);
+	}
 }
