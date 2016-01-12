@@ -110,8 +110,8 @@ int main(int argc, char *argv[]){
 	switch(argc){
 		case 1:
 			mode_state = 1;
-			s_state = 1;
-			s_rate = 10;
+			s_state = 0;
+			s_rate = 1;
 			break;
 		case 2:
 			if(strcmp(argv[1], "-s") == 0){
