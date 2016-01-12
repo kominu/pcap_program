@@ -974,6 +974,9 @@ void fwRead(char *lasthash, FILE *fip){
 			memset(input_send, '\0', strlen(input_send));
 			memset(output_send, '\0', strlen(output_send));
 
+			strcpy(input_send, "input,\n");
+			strcpy(output_send, "output,\n");
+
 			saveptr = saveptr2 = NULL;
 
 			while(fgets(str, 255, fip) != NULL){
