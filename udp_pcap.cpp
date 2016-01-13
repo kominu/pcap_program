@@ -936,6 +936,7 @@ void fwRead(char *lasthash, FILE *fip){
 	char *find;//改行を消す際使用
 	char newhash[100];
 	bool send_flag = true;
+	char before_log[256];
 
 	while(1){
 		if(!(fip = popen("sudo md5sum /etc/sysconfig/iptables", "r"))){
@@ -947,8 +948,31 @@ void fwRead(char *lasthash, FILE *fip){
 			exit(1);
 		}
 		pclose(fip);
-		if(strcmp(newhash, lasthash) != 0){
-			send_flag = true;
+		if(send_flag == false && strcmp(newhash, lasthash) != 0){
+			if(!(fip = popen("sudo tail -n 1 /var/log/iptables.log", "r"))){
+				cerr << "error in popen" << endl;
+				exit(1);
+			}
+			if(fgets(str, 255, fip) != NULL){
+				strcpy(before_log, str);
+			}
+			pclose(fip);	
+			while(1){
+				if(!(fip = popen("sudo tail -n 1 /var/log/iptables.log", "r"))){
+					cerr << "error in popen" << endl;
+					exit(1);
+				}
+				if(fgets(str, 255, fip) != NULL){
+					if(strcmp(str, before_log) == 0){
+					}else if(strstr(str, "ip_tables:")){
+						sleep(3);
+						cout << "iptables restart" << endl;
+						send_flag = true;
+					}
+				}
+				pclose(fip);
+				if(send_flag) break;
+			}
 		}
 		if(send_flag){
 
@@ -980,13 +1004,12 @@ void fwRead(char *lasthash, FILE *fip){
 			saveptr = saveptr2 = NULL;
 
 			while(fgets(str, 255, fip) != NULL){
-
 				//ユーザチェーン読み込み
 				if(fw_original){
 					if(str[0] == '\n'){
 						//original_send[strlen(original_send)] = "\0";
 						fw_original = false;
-					}else if(!strstr(str, "target") && !strstr(str, " LOG ")){
+					}else if(!strstr(str, "target")){
 						if((find = strchr(str, '\n')) != NULL){
 							//*find = '\0';
 						}
@@ -997,7 +1020,7 @@ void fwRead(char *lasthash, FILE *fip){
 					if(str[0] == '\n'){
 						//original2_send[strlen(original2_send)] = "\0";
 						fw_original2 = false;
-					}else if(!strstr(str, "target") && !strstr(str, " LOG ")){
+					}else if(!strstr(str, "target")){
 						if((find = strchr(str, '\n')) != NULL){
 							//*find = '\0';
 						}
@@ -1059,7 +1082,7 @@ void fwRead(char *lasthash, FILE *fip){
 					if(str[0] == '\n'){
 						//input_send[strlen(input_send)] = "\0";
 						fw_input = false;
-					}else if(!strstr(str, "target") && !strstr(str, " LOG ")){
+					}else if(!strstr(str, "target")){
 						if((original_name[0] != '\0') && strstr(str, original_name)){
 							strcat(input_send, original_send);
 							//strcat(input_send, ";");
@@ -1078,7 +1101,7 @@ void fwRead(char *lasthash, FILE *fip){
 					if(str[0] == '\n'){
 						//output_send[strlen(output_send)] = "\0";
 						fw_output = false;
-					}else if(!strstr(str, "target") && !strstr(str, " LOG ")){
+					}else if(!strstr(str, "target")){
 						if((original_name[0] != '\0') && strstr(str, original_name)){
 							strcat(output_send, original_send);
 							//strcat(output_send, ";");
@@ -1117,6 +1140,5 @@ void fwRead(char *lasthash, FILE *fip){
 			strcpy(lasthash, newhash);
 			send_flag = false;
 		}
-		sleep(3);
 	}
 }
