@@ -33,7 +33,7 @@ ofstream cap_csv;//cap_csvファイルに書き込むようのオブジェクト
 ofstream err_csv;//err_cav用
 FILE *fp2;//popen用の一時的なポインタ
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
-void logRead(char *last, FILE *flog);
+void logRead(long fpos, FILE *flog);
 void logSend(const char *buf);
 void fwRead(char *lasthash, FILE *fip);
 
@@ -343,20 +343,20 @@ int main(int argc, char *argv[]){
 					fwRead(last_fwhash, fip);
 					break;
 				default://logread
-					char last_log[256];
+					char log_str[256];
 					FILE *f_log;
+					long fpos;
 
-					if(!(f_log = popen("sudo tail -n 1 /var/log/iptables.log", "r"))){
-						cerr << "error in popen" << endl;
+					if(!(f_log = fopen("/var/log/iptables.log", "rb"))){
+						cerr << "error in fopen" << endl;
 						exit(1);
 					}
-					if(!fgets(last_log, 255, f_log)){
-						cerr << "error in fgets:" << pid << endl;
-						exit(1);
+					while(fgets(log_str, 255, f_log) != NULL){
 					}
-					pclose(f_log);
+					fpos = ftell(f_log);
+					fclose(f_log);
 
-					logRead(last_log, f_log);
+					logRead(fpos, f_log);
 					break;
 			}
 
@@ -848,23 +848,26 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 	}
 }
 
-void logRead(char *last, FILE *flog){
-	char new_log[256];
+
+void logRead(long fpos, FILE *flog){
+	char str[256];
 
 	while(1){
-		if(!(flog = popen("sudo tail -n 1 /var/log/iptables.log", "r"))){
-			cerr << "error in popen" << endl;
+		if(!(flog = fopen("/var/log/iptables.log", "rb"))){
+			cerr << "error in logRead:fopen" << endl;
 			exit(1);
 		}
-		if(!fgets(new_log, 255, flog)){
-			cerr << "error in fgets" << endl;
-			exit(1);
+		fseek(flog, fpos, SEEK_SET);
+		while(fgets(str, 255, flog) != NULL){
+			logSend(str);
 		}
-		if(strcmp(new_log, last) != 0){
-			logSend(new_log);
-			strcpy(last, new_log);
+		if(fpos != ftell(flog)){
+			fpos = ftell(flog);
+			fclose(flog);
+		}else{
+			fclose(flog);
+			sleep(0.5);
 		}
-		pclose(flog);
 	}
 }
 
@@ -912,7 +915,7 @@ void logSend(const char *buf){
 			split_str = strtok_r(NULL, separator, &saveptr);
 		}
 		sprintf(log_query, "log,%s,%s,%s,%s", idnum, sport, dport, str2);
-		cout << log_query << endl;
+		//cout << log_query << endl;
 		if(sendto(sock, log_query, strlen(log_query), 0, (struct sockaddr *)&distination, sizeof(distination)) < 0){
 			cerr << "error in sending logs" << endl;
 		}
