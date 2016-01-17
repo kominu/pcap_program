@@ -17,6 +17,7 @@
 #include <map>
 #include <mysql/mysql.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 #define DBHOST "localhost"
 #define DBUSER "pcap"
@@ -35,7 +36,7 @@ FILE *fp2;//popen用の一時的なポインタ
 void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *packet);
 void logRead(long fpos, FILE *flog);
 void logSend(const char *buf);
-void fwRead(char *lasthash, FILE *fip);
+void fwRead(char *lasthash, FILE *fip, int pp);
 
 long s_time;
 bpf_u_int32 my_addr;
@@ -56,6 +57,8 @@ time_t start_time, last_time;
 char last_netstat[128];
 const char *check_list[] = {"DROP", "SRC", "DST", "PROTO", "SPT", "DPT", "SYN", "ACK", "RST", "FIN", "ID"};
 int sample_count;
+time_t last_sec;
+int pipe_ptr[2];
 
 /*
  * 直前のip, port, protocol, flag, 経過時間と比較し、
@@ -88,7 +91,7 @@ int main(int argc, char *argv[]){
 	struct hostent *host;
 	char message[256];
 	//char filter_exp[] = "(not udp src port 19998) && (not (host kominu.com && port 3306))";
-	char filter_exp[] = "(not udp src port 19998)";
+	char filter_exp[] = "(not udp src port 19998) and (host 175.130.125.97)";
 	char filter_exp2[128];
 	//char filter_exp[] = "";
 	struct bpf_program fp;
@@ -104,6 +107,7 @@ int main(int argc, char *argv[]){
 	old_e_time = 0;
 	start_time = time(NULL);
 	last_time = time(NULL);
+	last_sec = time(NULL);
 	strcpy(last_netstat, "netstat");
 
 	/* const u_char *packet; */
@@ -294,6 +298,7 @@ int main(int argc, char *argv[]){
 	if(recvfrom(sock, message, strlen(message), 0, (struct sockaddr *)&distination, &addrlen) > 0){
 		cout << message << endl;
 	} 
+	sleep(1);
 
 	/* キャプチャ */
 	cout << "パケットキャプチャを開始" << endl;
@@ -314,6 +319,7 @@ int main(int argc, char *argv[]){
 	send_netstat();
 	/* pcaploopとlogreadをマルチプロセスで動かす */
 
+	pipe(pipe_ptr);
 	pid = fork();
 
 	switch(pid){
@@ -340,7 +346,7 @@ int main(int argc, char *argv[]){
 						cerr << "error in fgets fip" << endl;
 					}
 					pclose(fip);
-					fwRead(last_fwhash, fip);
+					fwRead(last_fwhash, fip, pipe_ptr[0]);
 					break;
 				default://logread
 					char log_str[256];
@@ -615,6 +621,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		last_time = time(NULL);
 	}
 	if( sampling(sample_count++) != 0){
+		write(pipe_ptr[1], "a", 2);
 		/* logファイルに書き込む */
 		//pcap_dump((unsigned char *)dumpfile, header, packet);
 
@@ -923,7 +930,7 @@ void logSend(const char *buf){
 }
 
 
-void fwRead(char *lasthash, FILE *fip){
+void fwRead(char *lasthash, FILE *fip, int pp){
 
 	char str[256];//fgets用
 	bool fw_input, fw_output, fw_original, fw_original2;//読み込んでいる間true
@@ -941,7 +948,7 @@ void fwRead(char *lasthash, FILE *fip){
 	bool send_flag = true;
 	char before_log[256];
 
-	while(1){
+	//while(1){
 		if(!(fip = popen("sudo md5sum /etc/sysconfig/iptables", "r"))){
 			cerr << "error in popen" << endl;
 			exit(1);
@@ -1142,6 +1149,23 @@ void fwRead(char *lasthash, FILE *fip){
 			pclose(fip);
 			strcpy(lasthash, newhash);
 			send_flag = false;
+		}
+		char buf[10];
+		int pcount, fcount;
+		pcount = 0;
+		fcount = 0;
+		time_t thistime = time(NULL);
+		fcntl(pp, F_SETFL, O_NONBLOCK);
+	while(1){
+		if(read(pp, buf, sizeof(buf)) >= 0){
+			pcount++;
+		}
+		fcount++;
+		if(difftime(time(NULL), thistime) > 0){
+			cout << pcount << " pps, " << endl;
+			pcount = 0;
+			fcount = 0;
+			thistime = time(NULL);
 		}
 	}
 }
