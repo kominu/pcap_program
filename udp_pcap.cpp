@@ -99,7 +99,7 @@ int main(int argc, char *argv[]){
 	struct hostent *host;
 	char message[256];
 	//char filter_exp[] = "(not udp src port 19998) && (not (host kominu.com && port 3306))";
-	char filter_exp[] = "(not udp src port 19998)";
+	char filter_exp[] = "(not udp src port 19998) and not port 10022";
 	char filter_exp2[128];
 	//char filter_exp[] = "";
 	struct bpf_program fp;
@@ -640,7 +640,7 @@ void got_packet(u_char *args, const struct pcap_pkthdr *header, const u_char *pa
 		send_netstat();
 		last_time = time(NULL);
 	}
-	if(difftime(time(NULL), cleartime) > 600){
+	if(difftime(time(NULL), cleartime) > 6000){
 		clearMap();
 	}
 	if( sampling(sample_count++) != 0){

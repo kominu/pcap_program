@@ -11,6 +11,7 @@ packet capture program(C++)
 * mysql
 * mysql-server
 * mysql-devel 
+./yuminstall.sh でok 
 をインストール
 
 iptablesの設定に 
